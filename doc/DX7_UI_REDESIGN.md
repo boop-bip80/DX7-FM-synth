@@ -38,12 +38,13 @@ Use subtle strokes and carefully controlled illumination for visual hierarchy. D
 
 The following are **verification gates**, not claims that all are complete:
 
-- [x] Linux native standalone compiles and launches using the redesigned JUCE editor — [screenshot build/run 41266055783](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055783).
-- [x] Windows standalone and plug-in build job passes on GitHub Actions — [multi-platform build run 41266055693](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693); **host runtime not independently tested**.
-- [x] macOS standalone and plug-in build job passes on GitHub Actions — [same build run](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693); **host runtime and code-signing acceptance not independently tested**.
-- [x] An actual Linux standalone window was captured under Xvfb and committed to `docs/screenshots/dx7-main.png` by the UI screenshot workflow (1202 × 870; capture run above, bot commit `719ad9e`).
+- [x] Linux native standalone compiles and launches using the redesigned JUCE editor — [final screenshot build/run 41267462749](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749) for source `28e6b2d`.
+- [x] Windows standalone and plug-in build job passes on GitHub Actions — [final multi-platform build run 41267462752](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752) for `28e6b2d`; **host runtime not independently tested**.
+- [x] macOS standalone and plug-in build job passes on GitHub Actions — [same final build run](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752); **host runtime and code-signing acceptance not independently tested**.
+- [x] An actual Linux standalone window was captured under Xvfb and committed to `docs/screenshots/dx7-main.png` by the UI screenshot workflow (1202 × 870; final capture run above, bot commit `bd8933d`).
 - [x] README embeds the verified main screenshot and links to the current build/release artifacts.
-- [ ] Cropped operator and performance screenshot views are committed and verified in the follow-up UI-preview run.
+- [x] The `UI-Nightly` rolling release was republished from the same source SHA `28e6b2d`, with five packages and a successful [final publish job](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752).
+- [x] Operator and performance detail crops from the live Linux application are committed alongside the full screenshot ([final capture run 41267462749](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749), [screenshot directory](https://github.com/boop-bip80/DX7-FM-synth/tree/master/docs/screenshots)).
 - [ ] All six operator panels and the algorithm diagram are legible at the default zoom level.
 - [ ] Program browsing, SysEx import/export, operator switches and keyboard shortcuts work manually.
 - [ ] Rendering is checked with keyboard shown and hidden, at available zoom settings.

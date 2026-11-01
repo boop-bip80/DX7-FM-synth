@@ -25,7 +25,7 @@ This is **not** Arturia DX7 V, and it is not affiliated with or endorsed by Artu
 
 </details>
 
-*Screenshot provenance:* The main image is a **real 1202 × 870 capture of the compiled Linux JUCE standalone**, taken under Xvfb and committed by GitHub Actions—not a design mockup. [Screenshot run 41266055783 passed](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055783) for UI commit `81e4923`; the screenshot was committed in `719ad9e`. The detail images are crops of the same genuine running UI, **not additional screens**. They are populated by the follow-up screenshot workflow run; if a crop is not yet present, download the latest **dx7-ui-screenshots** artifact or inspect the [workflow status](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/ui-preview.yml).
+*Screenshot provenance:* All three images are from the **actual compiled Linux JUCE standalone**, captured under Xvfb—not design mockups. The full view is 1202 × 870; the operator and performance views are **detail crops of that same instrument window**, not additional screens. The final [screenshot run 41267462749 passed](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749) for source `28e6b2d`; GitHub Actions refreshed the main and performance images in [`bd8933d`](https://github.com/boop-bip80/DX7-FM-synth/commit/bd8933d953df04c5b223fd35afa5491a94658c7a), while the operator crop remained unchanged from the preceding live capture. All three images are checked in, and the downloadable **dx7-ui-screenshots** artifact contains the gallery.
 
 ### What the editor focuses on
 
@@ -39,7 +39,7 @@ The editor refresh does **not** introduce Arturia-only synthesis features, addit
 
 ## Get the latest builds
 
-The newest binaries are built by GitHub Actions from this repository, not the upstream Dexed release page. The [**UI-Nightly release**](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) is refreshed on successful Windows, macOS **and** Linux builds. As of [build run 41266055693](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693), all three OS jobs succeeded and the release includes Linux ZIP, Windows EXE/ZIP and macOS DMG/ZIP downloads. Check the release's displayed upload date and run results for newer revisions.
+The newest binaries are built by GitHub Actions from this repository, not the upstream Dexed release page. The [**UI-Nightly release**](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) is refreshed only after successful Windows, macOS **and** Linux builds. All three build jobs **and the release-publishing job passed** in [final run 41267462752](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752). GitHub's release metadata identifies source `28e6b2dcf3fcc05140d911a19f601c489a662ecd`; five assets were refreshed on November 1, 2026 (Linux ZIP, Windows EXE/ZIP, macOS DMG/ZIP). For newer revisions, recheck the linked release's source SHA and run status.
 
 **About the filename:** installers are still named `Dexed-1.1.0-*`, and the installed plug-in/standalone window still identifies as **Dexed**. That original plug-in identity is intentionally retained for existing DAW project and host compatibility, even though this fork's repository and redesigned interface use DX7 FM Synth branding. This is not an installation mistake.
 
@@ -85,9 +85,10 @@ On Linux, install system libraries for ALSA, X11, FreeType, OpenGL, WebKit, JACK
 
 | Check | Evidence |
 | --- | --- |
-| Native CI compile / installer output | **Passed** for Linux, Windows and macOS at `81e4923`; [successful build run 41266055693](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693) |
-| Linux standalone GUI launch and main screenshot | **Passed**, 1202 × 870 real capture; [successful screenshot run 41266055783](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055783) |
-| Operator/performance cropped screenshot gallery | Same captured screen; [latest capture run](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/ui-preview.yml) must finish and commit both crops before considering them verified |
+| Native CI compile / installer output | **Passed** for Linux, Windows and macOS at `28e6b2d`; [final build run 41267462752](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752) |
+| UI-Nightly package publication | **Passed**; five refreshed assets identify the exact source SHA `28e6b2d`; [release downloads](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) |
+| Linux standalone GUI launch and main screenshot | **Passed** for source `28e6b2d`, 1202 × 870 real capture; [screenshot run 41267462749](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749) |
+| Operator/performance cropped screenshot gallery | **Passed**; real crop images committed and [visible on master](https://github.com/boop-bip80/DX7-FM-synth/tree/master/docs/screenshots), final capture run above |
 | Layout usability and keyboard behavior | **Not yet verified manually**; [manual UX gate checklist](doc/DX7_UI_REDESIGN.md#completion-checklist) |
 | DSP, SysEx, host automation, accessibility | Need separate functional/manual verification; a UI screenshot alone does not establish correctness |
 
