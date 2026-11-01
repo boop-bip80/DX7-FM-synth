@@ -168,10 +168,9 @@ void ProgramSelector::paint(Graphics &g) {
     g.setColour(hasKeyboardFocus(true) ? DXLookNFeel::fillColour : Colour(0xFF49616B));
     g.drawRoundedRectangle(bounds, 5.0f, hasKeyboardFocus(true) ? 1.6f : 1.0f);
 
-    g.setFont(juce::Font(jmax(11.0f, jmin(14.0f, height * 0.58f))));
-    g.setColour(Colour(0xFFE8E6DA));
-    g.drawFittedText(getText(), 10, 1, getWidth() - 36, getHeight() - 2,
-                     Justification::centredLeft, 1, 0.7f);
+    // ComboBox already owns a Label child that displays the selected text.
+    // Painting the same text here overlays two different font metrics and
+    // makes preset names unreadable. Keep this pass for the frame/arrows.
 
     const float arrowCenterX = width - 12.0f;
     Path arrows;
