@@ -316,7 +316,7 @@ void OperatorEditor::paint(juce::Graphics& g) {
 
     g.setColour(teal);
     g.fillRoundedRectangle(10.0f, 8.0f, 2.0f, 12.0f, 1.0f);
-    label("FREQUENCY", 17, 8, 69, 10, dim, 8.7f);
+    label("TUNE", 17, 8, 35, 11, dim, 9.2f);
     label("DETUNE", 7, 59, 34, 10, dim, 7.5f, Justification::centred);
     label("COARSE", 43, 59, 34, 10, dim, 7.5f, Justification::centred);
     label("FINE", 80, 59, 33, 10, dim, 7.5f, Justification::centred);
@@ -332,25 +332,28 @@ void OperatorEditor::paint(juce::Graphics& g) {
     g.setColour(amber);
     g.fillRoundedRectangle(10.0f, 80.0f, 2.0f, 10.0f, 1.0f);
     label("AMPLITUDE ENVELOPE", 16, 79, 100, 10, dim, 8.2f);
-    label("LEVEL", 11, 116, 39, 9, teal, 8.3f);
-    label("RATE", 11, 160, 39, 9, amber, 8.3f);
     for (int i = 0; i < 4; ++i) {
-        label(String(i + 1), 8 + i * 28, 119, 30, 8, dim, 7.1f, Justification::centred);
-        label(String(i + 1), 8 + i * 28, 163, 30, 8, dim, 7.1f, Justification::centred);
+        label("L" + String(i + 1), 8 + i * 28, 118, 30, 10,
+              teal, 8.2f, Justification::centred);
+        label("R" + String(i + 1), 8 + i * 28, 159, 30, 10,
+              amber, 8.2f, Justification::centred);
     }
 
-    label("KEYBOARD SCALING", 131, 118, 142, 10, dim, 8.7f);
-    label("LEFT", 130, 150, 43, 10, dim, 8.0f, Justification::centred);
-    label("BREAKPOINT", 171, 121, 70, 10, dim, 7.8f, Justification::centred);
-    label("RIGHT", 239, 150, 44, 10, dim, 8.0f, Justification::centred);
-    label("L CURVE", 125, 195, 48, 10, dim, 8.0f, Justification::centred);
-    label("RATE", 179, 165, 49, 10, dim, 8.0f, Justification::centred);
-    label("R CURVE", 234, 195, 49, 10, dim, 8.0f, Justification::centred);
+    // Each caption sits in its own row.  The original bitmap layered the
+    // breakpoint heading over the larger KEYBOARD SCALING label and both
+    // landed directly on top of sliders at the wider editor size.
+    label("KEY SCALE", 132, 118, 66, 11, dim, 9.1f);
+    label("BREAK", 191, 125, 37, 10, dim, 8.1f, Justification::centred);
+    label("L DEPTH", 125, 166, 51, 10, dim, 8.4f, Justification::centred);
+    label("RATE", 179, 166, 49, 10, dim, 8.4f, Justification::centred);
+    label("R DEPTH", 232, 166, 51, 10, dim, 8.4f, Justification::centred);
+    label("L CURVE", 125, 204, 48, 9, dim, 8.3f, Justification::centred);
+    label("R CURVE", 234, 204, 49, 9, dim, 8.3f, Justification::centred);
 
     // Low-cost active status stripe provides an immediate at-a-glance overview
     // of which of the six FM operators are contributing to the patch.
     g.setColour(opSwitch->getToggleState() ? teal : amber.withAlpha(0.45f));
-    g.fillRoundedRectangle(8.0f, 212.0f, 271.0f, 2.0f, 1.0f);
+    g.fillRoundedRectangle(8.0f, 215.0f, 271.0f, 1.5f, 0.75f);
 }
 
 void OperatorEditor::resized() {
@@ -367,8 +370,28 @@ void OperatorEditor::resized() {
         // breathing room without distorting the rotary controls into ellipses.
         if (dynamic_cast<juce::Slider*>(control.first) == nullptr)
             bounds.setSize(roundToInt(base.getWidth() * sx), roundToInt(base.getHeight() * sy));
+        if (dynamic_cast<OperatorDisplay*>(control.first) != nullptr)
+            bounds = {roundToInt(58.0f * sx), roundToInt(8.0f * sy),
+                      roundToInt(57.0f * sx), jmax(13, roundToInt(14.0f * sy))};
         control.first->setBounds(bounds);
     }
+    // Create a proper label band above keyboard-scaling controls.  Reposition
+    // just these six controls; their existing APVTS attachments stay untouched.
+    const auto place = [this, sx, sy](const String& name, int x, int y, int w, int h) {
+        for (const auto& control : designBounds) {
+            if (control.first->getName() == name) {
+                control.first->setBounds(roundToInt(x * sx), roundToInt(y * sy), w, h);
+                return;
+            }
+        }
+    };
+    const int num = 5 - internalOp;
+    place(IDs::lScaleDepth.op(num).name, 131, 132, 34, 34);
+    place(IDs::rScaleDepth.op(num).name, 241, 132, 34, 34);
+    place(IDs::breakpoint.op(num).name, 178, 136, 54, 24);
+    place(IDs::rateScaling.op(num).name, 186, 175, 34, 34);
+    place(IDs::lKeyScale.op(internalOp).name, 128, 178, roundToInt(36 * sx), 26);
+    place(IDs::rKeyScale.op(internalOp).name, 240, 178, roundToInt(36 * sx), 26);
     opMode->setBounds(roundToInt(137.0f * sx), roundToInt(19.0f * sy),
                       roundToInt(74.0f * sx), roundToInt(25.0f * sy));
     opSwitch->setBounds(getWidth() - 37, roundToInt(10.0f * sy), 30, 30);

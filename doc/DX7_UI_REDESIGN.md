@@ -38,11 +38,12 @@ Use subtle strokes and carefully controlled illumination for visual hierarchy. D
 
 The following are **verification gates**, not claims that all are complete:
 
-- [ ] Linux native standalone compiles and launches using the redesigned JUCE editor.
-- [ ] Windows standalone / plug-in builds pass on GitHub Actions.
-- [ ] macOS standalone / plug-in builds pass on GitHub Actions.
-- [ ] An actual Linux standalone window is captured under Xvfb and committed to `docs/screenshots/dx7-main.png` by the UI screenshot workflow.
-- [ ] README shows the screenshot from the same redesign, and provides build artifact links.
+- [x] Linux native standalone compiles and launches using the redesigned JUCE editor — [screenshot build/run 41266055783](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055783).
+- [x] Windows standalone and plug-in build job passes on GitHub Actions — [multi-platform build run 41266055693](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693); **host runtime not independently tested**.
+- [x] macOS standalone and plug-in build job passes on GitHub Actions — [same build run](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41266055693); **host runtime and code-signing acceptance not independently tested**.
+- [x] An actual Linux standalone window was captured under Xvfb and committed to `docs/screenshots/dx7-main.png` by the UI screenshot workflow (1202 × 870; capture run above, bot commit `719ad9e`).
+- [x] README embeds the verified main screenshot and links to the current build/release artifacts.
+- [ ] Cropped operator and performance screenshot views are committed and verified in the follow-up UI-preview run.
 - [ ] All six operator panels and the algorithm diagram are legible at the default zoom level.
 - [ ] Program browsing, SysEx import/export, operator switches and keyboard shortcuts work manually.
 - [ ] Rendering is checked with keyboard shown and hidden, at available zoom settings.

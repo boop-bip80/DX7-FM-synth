@@ -385,7 +385,7 @@ void GlobalEditor::paint(juce::Graphics& g) {
     const auto raised = juce::Colour(0xff17242d);
     const auto card = juce::Colour(0xff20303b);
     const auto text = juce::Colour(0xffe8e6da);
-    const auto muted = juce::Colour(0xff9eafbf);
+    const auto muted = juce::Colour(0xffbac9d0);
     const auto teal = juce::Colour(0xff55d7c7);
     const auto amber = juce::Colour(0xfff2b563);
 
@@ -412,7 +412,7 @@ void GlobalEditor::paint(juce::Graphics& g) {
     auto caption = [&](const juce::String& label, int x, int y, int width,
                        juce::Justification alignment = juce::Justification::centred) {
         g.setColour(muted);
-        g.setFont(juce::Font(8.0f, juce::Font::bold));
+        g.setFont(juce::Font(9.2f, juce::Font::bold));
         g.drawFittedText(label, x, y, width, 12, alignment, 1);
     };
 
@@ -424,8 +424,8 @@ void GlobalEditor::paint(juce::Graphics& g) {
     g.setColour(teal);
     g.drawFittedText("/7", 78, 12, 49, 36, juce::Justification::centredLeft, 1);
     g.setColour(muted);
-    g.setFont(juce::Font(8.0f, juce::Font::bold));
-    g.drawFittedText("SIX-OPERATOR SYNTHESIS", 12, 49, 128, 13,
+    g.setFont(juce::Font(9.2f, juce::Font::bold));
+    g.drawFittedText("SIX-OPERATOR FM ENGINE", 12, 49, 128, 13,
                      juce::Justification::centredLeft, 1);
     g.setColour(juce::Colour(0xff0d151c));
     g.fillRoundedRectangle(7.0f, 82.0f, 137.0f, 29.0f, 4.0f);
@@ -434,26 +434,24 @@ void GlobalEditor::paint(juce::Graphics& g) {
 
     // Keep all labels independent of localized image assets. Compact headings
     // preserve the entire original DX7 parameter surface without tab hopping.
-    caption("TUNE", 190, 40, 35);
-    caption("CUTOFF", 228, 40, 46);
-    caption("RESO", 278, 40, 35);
-    caption("OUTPUT", 153, 93, 42);
-    caption("TRANSPOSE", 195, 93, 50);
-    caption("MONO", 250, 93, 49);
+    caption("TUNE", 190, 44, 35);
+    caption("CUTOFF", 228, 44, 46);
+    caption("RESO", 278, 44, 35);
+    caption("OUTPUT", 153, 96, 42);
+    caption("TRANSPOSE", 195, 96, 50);
+    caption("MONO", 250, 96, 49);
     caption("ALGORITHM", 335, 9, 151, juce::Justification::centredLeft);
     caption("SELECT", 495, 56, 45);
     caption("FEEDBACK", 491, 116, 52);
     caption("WAVE", 555, 34, 66);
     caption("MOD SENS", 653, 34, 59);
-    caption("SPEED", 559, 85, 44);
-    caption("DELAY", 600, 85, 41);
-    caption("PITCH", 643, 85, 42);
-    caption("AMP", 685, 85, 37);
-    caption("LFO SYNC", 561, 119, 75);
-    caption("OSC SYNC", 645, 119, 78);
+    caption("SPEED", 559, 87, 44);
+    caption("DELAY", 600, 87, 41);
+    caption("PITCH", 643, 87, 42);
+    caption("AMP", 685, 87, 37);
+    caption("LFO SYNC", 561, 125, 75);
+    caption("OSC SYNC", 645, 125, 78);
     caption("PITCH ENVELOPE", 742, 41, 109);
-    caption("LEVEL", 735, 84, 40);
-    caption("RATE", 735, 122, 40);
 
     auto led = [&](int x, int y, bool enabled) {
         g.setColour((enabled ? teal : muted).withAlpha(enabled ? 0.23f : 0.11f));

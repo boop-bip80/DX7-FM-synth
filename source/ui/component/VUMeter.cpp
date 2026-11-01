@@ -9,6 +9,7 @@
 */
 
 #include <JuceHeader.h>
+#include <cmath>
 
 #include "VUMeter.h"
 
@@ -141,10 +142,58 @@ int VuMeterBase::ampToStripeIndex_be(float amp) {
     return index;
 }
 
-// Paints a single stripe.
+// Render the legacy 46-step logarithmic meter as crisp, palette-coherent
+// vector LEDs. There are no image copies, paths, strings, or heap allocations
+// on the paint path, even when a host scales the instrument window.
 void VuMeterBase::paint(Graphics& g) {
-    int index = (this->*ampToStripeIndex)(v);
-    g.drawImageAt(*(singleStripes[index]), 0, 0); // it might be more efficient than the ``drawImage()``
+    const auto bounds = getLocalBounds().toFloat();
+    if (bounds.getWidth() < 10.0f || bounds.getHeight() < 3.0f)
+        return;
+
+    const int active = jlimit(0, totalBlocks,
+                              (this->*ampToStripeIndex)(std::isfinite(v) ? v : 0.0f));
+    const float padding = jmin(1.5f, bounds.getHeight() * 0.16f);
+    const float gap = jlimit(0.55f, 1.6f, bounds.getWidth() * 0.0065f);
+    const float ledWidth = (bounds.getWidth() - 2.0f * padding
+                            - (totalBlocks - 1) * gap) / totalBlocks;
+    const float ledHeight = bounds.getHeight() - padding * 2.0f;
+    if (ledWidth <= 0.15f || ledHeight <= 0.5f)
+        return;
+
+    const auto teal = Colour(0xFF55D7C7);
+    const auto amber = Colour(0xFFF2B563);
+    const auto warmPeak = Colour(0xFFFFD397);
+    const auto inactive = Colour(0xFF293C47);
+    const bool outputMeter = mindB > -45; // +6 dB output versus 0 dB operators
+
+    g.setColour(Colour(0xFF0D171F));
+    g.fillRoundedRectangle(bounds, jmin(3.0f, bounds.getHeight() * 0.35f));
+
+    const float radius = jmin(0.8f, ledWidth * 0.35f);
+    float ledX = bounds.getX() + padding;
+    for (int block = 0; block < totalBlocks; ++block) {
+        Colour led = inactive;
+        if (block < active) {
+            if (outputMeter && block >= totalBlocks - VuMeterOutput::numRedBlocks)
+                led = warmPeak;
+            else if (outputMeter && block >= totalBlocks
+                                                   - VuMeterOutput::numRedBlocks
+                                                   - VuMeterOutput::numYellowBlocks)
+                led = amber;
+            else if (!outputMeter && block >= totalBlocks - 3)
+                led = amber;
+            else
+                led = teal;
+        }
+        g.setColour(led);
+        g.fillRoundedRectangle(ledX, bounds.getY() + padding,
+                               ledWidth, ledHeight, radius);
+        ledX += ledWidth + gap;
+    }
+
+    g.setColour(Colour(0xFF405863).withAlpha(0.55f));
+    g.drawRoundedRectangle(bounds.reduced(0.35f),
+                           jmin(3.0f, bounds.getHeight() * 0.35f), 0.65f);
 }
 
 // Calculates amplitude value from the traditional decibel (based on log10),
@@ -359,12 +408,13 @@ void VuStripesSingleton::destroyStripes(juce::Image** array) {
 
 // Constructor of VuMeter (solid color), using 0 dB as upper limit
 VuMeter::VuMeter(): VuMeterBase(0) {
-    singleStripes = VuStripesSingleton::getInstance().getSolidVuMeterStripes();
+    // Bitmap strip initialization is intentionally skipped for vector meters.
+    singleStripes = nullptr;
 }
 
 // Constructor of VuMeterOutput (tricolor), using +6 dB as upper limit
 VuMeterOutput::VuMeterOutput() : VuMeterBase(6) {
-    singleStripes = VuStripesSingleton::getInstance().getTricolorVuMeterStripes();
+    singleStripes = nullptr;
 }
 
 double VuMeterOutput::getDecayFactor(double sampleRate) {

@@ -67,3 +67,42 @@ if (( image_width < 700 || image_height < 450 )); then
 fi
 
 echo "Captured live editor: $destination (${image_width}x${image_height})"
+
+# Publish close-ups cut solely from the verified live frame. Fractions are in
+# thousandths of its actual dimensions, so resizing the plugin does not push
+# a crop beyond the source image. These are not separate/mock interface art.
+crop_detail() {
+  local label="$1" left="$2" top="$3" right="$4" bottom="$5"
+  local x y x_end y_end width height output actual_width actual_height
+
+  if (( left < 0 || top < 0 || right > 1000 || bottom > 1000 || left >= right || top >= bottom )); then
+    echo "Invalid normalized crop bounds for $label" >&2
+    exit 1
+  fi
+
+  x=$(( image_width * left / 1000 ))
+  y=$(( image_height * top / 1000 ))
+  x_end=$(( image_width * right / 1000 ))
+  y_end=$(( image_height * bottom / 1000 ))
+  width=$(( x_end - x ))
+  height=$(( y_end - y ))
+
+  if (( x < 0 || y < 0 || width < 100 || height < 100 || x_end > image_width || y_end > image_height )); then
+    echo "Crop $label escapes or is too small for ${image_width}x${image_height} source" >&2
+    exit 1
+  fi
+
+  output="$(dirname "$destination")/dx7-${label}.png"
+  convert "$destination" -crop "${width}x${height}+${x}+${y}" +repage -strip "$output"
+  read -r actual_width actual_height <<<"$(identify -format '%w %h' "$output")"
+  if (( actual_width != width || actual_height != height )); then
+    echo "Refusing $label crop: expected ${width}x${height}, got ${actual_width}x${actual_height}" >&2
+    exit 1
+  fi
+  echo "Live ${label} detail: $output (${actual_width}x${actual_height})"
+}
+
+# Six operator modules, including their routing/envelope controls.
+crop_detail operators 12 126 990 694
+# Performance strip, global controls, algorithm diagram and virtual keyboard.
+crop_detail performance 12 694 990 996

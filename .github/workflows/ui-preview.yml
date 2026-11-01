@@ -68,7 +68,7 @@ jobs:
           test -n "$path" && test -x "$path"
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
-      - name: Capture a real JUCE editor frame (not a mockup)
+      - name: Capture real JUCE editor and two validated detail crops
         run: |
           xvfb-run --auto-servernum --server-args='-screen 0 1600x1000x24' \
             bash .github/workflows/capture-ui.sh \
@@ -79,7 +79,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dx7-ui-screenshots
-          path: docs/screenshots/dx7-main.png
+          path: |
+            docs/screenshots/dx7-main.png
+            docs/screenshots/dx7-operators.png
+            docs/screenshots/dx7-performance.png
           if-no-files-found: error
           retention-days: 90
 
@@ -99,7 +102,7 @@ jobs:
           name: dx7-ui-screenshots
           path: docs/screenshots
 
-      - name: Record the live editor image in the repository README path
+      - name: Commit full screenshot and two actual-image detail crops
         shell: bash
         run: |
           # A screenshot of an obsolete commit must never overwrite a newer UI.
@@ -111,7 +114,9 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add docs/screenshots/dx7-main.png
+          git add docs/screenshots/dx7-main.png \
+            docs/screenshots/dx7-operators.png \
+            docs/screenshots/dx7-performance.png
           if git diff --cached --quiet; then
             echo 'Screenshot is unchanged.'
             exit 0
