@@ -10,16 +10,59 @@
 #endif
 
 class OperatorSwitch : public ToggleButton {
-    Image image;
-public :
-    OperatorSwitch(juce::String name) : ToggleButton(name) {
-        SharedResourcePointer<DXLookNFeel> lookAndFeel;
-        image = lookAndFeel->imageSwitchOperator;
-        setSize(32, 32);
+public:
+    explicit OperatorSwitch(juce::String name) : ToggleButton(name) {
+        setTooltip("Enable or disable this FM operator");
     }
 
     void paintButton(Graphics& g, bool isMouseOverButton, bool isButtonDown) override {
-        g.drawImage(image, 0, 0, 32, 32, 0, getToggleState() ? 0 : 64, 64, 64);
+        const auto on = getToggleState();
+        const auto bounds = getLocalBounds().toFloat().reduced(3.5f);
+        g.setColour(on ? Colour(0xff55d7c7) : Colour(0xff465765));
+        g.fillEllipse(bounds);
+        g.setColour(Colour(0xff101820));
+        g.fillEllipse(bounds.reduced(on ? 4.0f : 3.0f));
+        g.setColour(isButtonDown ? Colour(0xfff2b563)
+                                  : (isMouseOverButton ? Colour(0xffe8e6da)
+                                                       : (on ? Colour(0xff55d7c7) : Colour(0xff9eafbf))));
+        const auto cx = bounds.getCentreX();
+        const auto cy = bounds.getCentreY();
+        Path power;
+        power.addCentredArc(cx, cy + 1.3f, 6.1f, 6.1f, 0.0f, 0.68f, MathConstants<float>::twoPi - 0.68f, true);
+        g.strokePath(power, PathStrokeType(2.0f, PathStrokeType::curved, PathStrokeType::rounded));
+        g.drawLine(cx, cy - 8.0f, cx, cy + 1.0f, 2.0f);
+    }
+};
+
+// The DX7's ratio/fixed distinction deserves an actual control instead of
+// two tiny bitmap lamps.  The underlying parameter and automation stay the
+// same; the two positions are simply made legible.
+class OperatorModeSwitch : public ToggleButton {
+public:
+    explicit OperatorModeSwitch(const juce::String& name) : ToggleButton(name) {
+        setTooltip("Operator frequency mode: Ratio or Fixed Hz");
+    }
+
+    void paintButton(Graphics& g, bool isMouseOverButton, bool isButtonDown) override {
+        auto bounds = getLocalBounds().toFloat().reduced(1.0f);
+        const auto half = bounds.getWidth() * 0.5f;
+        g.setColour(Colour(0xff0d1820));
+        g.fillRoundedRectangle(bounds, 5.0f);
+        g.setColour(Colour(0xff405663));
+        g.drawRoundedRectangle(bounds, 5.0f, 1.0f);
+
+        auto selected = bounds.withX(getToggleState() ? bounds.getX() + half : bounds.getX())
+                              .withWidth(half);
+        g.setColour(isButtonDown ? Colour(0xfff2b563)
+                                 : (isMouseOverButton ? Colour(0xff71e6d8) : Colour(0xff55d7c7)));
+        g.fillRoundedRectangle(selected.reduced(2.0f), 3.5f);
+
+        g.setFont(juce::Font(juce::FontOptions().withHeight(10.5f).withStyle("Bold")));
+        g.setColour(getToggleState() ? Colour(0xffa9b9c4) : Colour(0xff101820));
+        g.drawFittedText("RATIO", bounds.withWidth(half).toNearestInt(), Justification::centred, 1);
+        g.setColour(getToggleState() ? Colour(0xff101820) : Colour(0xffa9b9c4));
+        g.drawFittedText("FIXED", bounds.withX(bounds.getX() + half).withWidth(half).toNearestInt(),
+                         Justification::centred, 1);
     }
 };
 
@@ -166,10 +209,10 @@ OperatorEditor::OperatorEditor(DexedAudioProcessor &processor, int num) : proces
     ampModeSens->setBounds(140, 76, 34, 34);
     binder->addAndAttach(std::move(ampModeSens));
 
-    opMode = std::make_unique<juce::ToggleButton>(IDs::mode.op(num).name);
+    opMode = std::make_unique<OperatorModeSwitch>(IDs::mode.op(num).name);
     opMode->setExplicitFocusOrder(12);
     opMode->setButtonText(juce::String());
-    opMode->setBounds(146, 19, 48, 26);
+    opMode->setBounds(137, 19, 74, 25);
     opMode->onClick = [this](){
         repaint();
     };
@@ -202,7 +245,7 @@ OperatorEditor::OperatorEditor(DexedAudioProcessor &processor, int num) : proces
     opSwitch = std::make_unique<OperatorSwitch>(IDs::on.op(5-internalOp).name);
     addAndMakeVisible(opSwitch.get());
     opSwitch->setTitle("Operator switch");
-    opSwitch->setBounds(226, 13, 64, 32);
+    opSwitch->setBounds(251, 10, 30, 30);
     binder->attach(opSwitch.get());
 
     envDisplay = std::make_unique<EnvDisplay>(processor.parameters, num);
@@ -213,12 +256,20 @@ OperatorEditor::OperatorEditor(DexedAudioProcessor &processor, int num) : proces
     addAndMakeVisible(vu.get());
     vu->setBounds(132, 52, 140, 8);
 
-    light = lookAndFeel->imageLight;
-    background = lookAndFeel->imageOperator;
-
     contextMenuAdapter = std::make_unique<OperatorContextMenu>(processor, internalOp);
     addMouseListener(contextMenuAdapter.get(), true);
     setWantsKeyboardFocus(true);
+
+    // Retain a clean, logical design grid even when the host or the new main
+    // editor changes the size of each operator card.  We capture the original
+    // coordinates once so repeated resizes never accumulate rounding errors.
+    for (int i = 0; i < getNumChildComponents(); ++i) {
+        auto* child = getChildComponent(i);
+        if (child != opMode.get() && child != opSwitch.get()
+            && child != envDisplay.get() && child != vu.get()) {
+            designBounds.emplace_back(child, child->getBounds());
+        }
+    }
 }
 
 OperatorEditor::~OperatorEditor() {
@@ -229,30 +280,102 @@ OperatorEditor::~OperatorEditor() {
 
 //==============================================================================
 void OperatorEditor::paint(juce::Graphics& g) {
-    g.drawImage(background, 0, 0, 287, 218, 0, 0, 574, 436);
+    if (getWidth() == 0 || getHeight() == 0)
+        return;
 
-    if ( opSwitch->getToggleState() )
-        g.setColour(Colours::white);
-    else
-        g.setColour(DXLookNFeel::roundBackground);
+    const Colour dark(0xff101820), panel(0xff17242d), inner(0xff20303b);
+    const Colour ink(0xffe8e6da), dim(0xff9eafbf), teal(0xff55d7c7), amber(0xfff2b563);
 
-    g.setFont(juce::Font(juce::FontOptions().withHeight(30.00f).withStyle("Regular")));
-    g.drawText(opNum, 250, 14, 30, 30, Justification::centred, true);
+    // Draw in 287 x 218 design units; child controls are laid out separately
+    // to retain their proper (circular) knob geometry at any card aspect ratio.
+    Graphics::ScopedSaveState saved(g);
+    g.addTransform(AffineTransform::scale(getWidth() / 287.0f, getHeight() / 218.0f));
+    g.setGradientFill(ColourGradient(panel.brighter(0.09f), 0.0f, 0.0f, dark, 287.0f, 218.0f, false));
+    g.fillRoundedRectangle(1.0f, 1.0f, 285.0f, 216.0f, 8.0f);
+    g.setColour(Colour(0xff40505c));
+    g.drawRoundedRectangle(1.0f, 1.0f, 285.0f, 216.0f, 8.0f, 1.0f);
 
-    bool state = opMode->getToggleState();
+    const auto section = [&g, &inner](float x, float y, float w, float h) {
+        g.setColour(inner.withAlpha(0.78f));
+        g.fillRoundedRectangle(x, y, w, h, 5.0f);
+        g.setColour(Colour(0xff344955));
+        g.drawRoundedRectangle(x + 0.5f, y + 0.5f, w - 1.0f, h - 1.0f, 5.0f, 0.7f);
+    };
+    section(6.0f, 6.0f, 115.0f, 67.0f);     // Tuning
+    section(125.0f, 6.0f, 155.0f, 105.0f);   // Output
+    section(6.0f, 77.0f, 115.0f, 135.0f);    // Envelope
+    section(125.0f, 115.0f, 155.0f, 97.0f);  // Keyboard scaling
 
-    // 129 x 24
-    g.drawImage(light, 127, 24, 14, 14, 0, state ? 0 : 28, 28, 28);
-    // 199 x 24
-    g.drawImage(light, 198, 24, 14, 14, 0, !state ? 0 : 28, 28, 28);
+    const auto label = [&g](const String& text, int x, int y, int width, int height,
+                            Colour colour, float size = 8.5f,
+                            Justification alignment = Justification::centredLeft) {
+        g.setColour(colour);
+        g.setFont(juce::Font(juce::FontOptions().withHeight(size).withStyle("Bold")));
+        g.drawFittedText(text, x, y, width, height, alignment, 1);
+    };
+
+    g.setColour(teal);
+    g.fillRoundedRectangle(10.0f, 8.0f, 2.0f, 12.0f, 1.0f);
+    label("FREQUENCY", 17, 8, 69, 10, dim, 8.7f);
+    label("DETUNE", 7, 59, 34, 10, dim, 7.5f, Justification::centred);
+    label("COARSE", 43, 59, 34, 10, dim, 7.5f, Justification::centred);
+    label("FINE", 80, 59, 33, 10, dim, 7.5f, Justification::centred);
+
+    label("PERFORMANCE", 132, 8, 80, 10, dim, 8.7f);
+    label("OP " + opNum, 213, 11, 35, 28, ink, 15.0f, Justification::centredRight);
+    label("FREQUENCY MODE", 135, 44, 89, 9, dim, 7.4f);
+    label("SIGNAL", 231, 44, 40, 9, dim, 7.4f, Justification::centredRight);
+    label("AM MOD", 132, 65, 50, 10, dim, 7.9f, Justification::centred);
+    label("VELOCITY", 196, 65, 51, 10, dim, 7.9f, Justification::centred);
+    label("OUTPUT", 240, 65, 42, 10, dim, 7.9f, Justification::centred);
+
+    g.setColour(amber);
+    g.fillRoundedRectangle(10.0f, 80.0f, 2.0f, 10.0f, 1.0f);
+    label("AMPLITUDE ENVELOPE", 16, 79, 100, 10, dim, 8.2f);
+    label("LEVEL", 11, 116, 39, 9, teal, 8.3f);
+    label("RATE", 11, 160, 39, 9, amber, 8.3f);
+    for (int i = 0; i < 4; ++i) {
+        label(String(i + 1), 8 + i * 28, 119, 30, 8, dim, 7.1f, Justification::centred);
+        label(String(i + 1), 8 + i * 28, 163, 30, 8, dim, 7.1f, Justification::centred);
+    }
+
+    label("KEYBOARD SCALING", 131, 118, 142, 10, dim, 8.7f);
+    label("LEFT", 130, 150, 43, 10, dim, 8.0f, Justification::centred);
+    label("BREAKPOINT", 171, 121, 70, 10, dim, 7.8f, Justification::centred);
+    label("RIGHT", 239, 150, 44, 10, dim, 8.0f, Justification::centred);
+    label("L CURVE", 125, 195, 48, 10, dim, 8.0f, Justification::centred);
+    label("RATE", 179, 165, 49, 10, dim, 8.0f, Justification::centred);
+    label("R CURVE", 234, 195, 49, 10, dim, 8.0f, Justification::centred);
+
+    // Low-cost active status stripe provides an immediate at-a-glance overview
+    // of which of the six FM operators are contributing to the patch.
+    g.setColour(opSwitch->getToggleState() ? teal : amber.withAlpha(0.45f));
+    g.fillRoundedRectangle(8.0f, 212.0f, 271.0f, 2.0f, 1.0f);
 }
 
 void OperatorEditor::resized() {
-    //[UserPreResize] Add your own custom resize code here..
-    //[/UserPreResize]
+    if (getWidth() <= 0 || getHeight() <= 0)
+        return;
 
-    //[UserResized] Add your own custom resize handling here..
-    //[/UserResized]
+    const float sx = getWidth() / 287.0f;
+    const float sy = getHeight() / 218.0f;
+    for (const auto& control : designBounds) {
+        const auto& base = control.second;
+        auto bounds = base;
+        bounds.setPosition(roundToInt(base.getX() * sx), roundToInt(base.getY() * sy));
+        // Sliders remain 34 x 34, so the new wide operator cards give more
+        // breathing room without distorting the rotary controls into ellipses.
+        if (dynamic_cast<juce::Slider*>(control.first) == nullptr)
+            bounds.setSize(roundToInt(base.getWidth() * sx), roundToInt(base.getHeight() * sy));
+        control.first->setBounds(bounds);
+    }
+    opMode->setBounds(roundToInt(137.0f * sx), roundToInt(19.0f * sy),
+                      roundToInt(74.0f * sx), roundToInt(25.0f * sy));
+    opSwitch->setBounds(getWidth() - 37, roundToInt(10.0f * sy), 30, 30);
+    envDisplay->setBounds(roundToInt(15.0f * sx), roundToInt(88.0f * sy),
+                          roundToInt(98.0f * sx), roundToInt(29.0f * sy));
+    vu->setBounds(roundToInt(132.0f * sx), roundToInt(53.0f * sy),
+                  roundToInt(140.0f * sx), jmax(7, roundToInt(8.0f * sy)));
 }
 
 //[MiscUserCode] You can add your own definitions of your custom methods or any other code here...

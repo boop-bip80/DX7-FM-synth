@@ -5,6 +5,8 @@
 #include "component/VUMeter.h"
 #include "component/EnvDisplay.h"
 #include "util/AudioComponentContainer.h"
+#include <utility>
+#include <vector>
 
 class OperatorEditor : public Component {
 public:
@@ -25,8 +27,9 @@ private:
     int internalOp;
 
     String opNum;
-    Image light;
-    Image background;
+    // Original coordinates of parameter-bound child widgets.  This keeps the
+    // new scalable vector panel independent of the host's editor size.
+    std::vector<std::pair<juce::Component*, juce::Rectangle<int>>> designBounds;
 
     std::unique_ptr<EnvDisplay> envDisplay;
     std::unique_ptr<ToggleButton> opSwitch;

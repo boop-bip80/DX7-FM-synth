@@ -36,7 +36,7 @@ public:
 
 class ProgramLabel;
 class ProgramListBox : public Component, public KeyListener {
-    ProgramListBoxListener *listener;    
+    ProgramListBoxListener *listener = nullptr;
     Cartridge cartContent;
     std::unique_ptr<ProgramLabel> labels[32];
 
@@ -65,7 +65,7 @@ public:
     }
 };
 
-class ProgramLabel : public Component, public DragAndDropTarget {
+class ProgramLabel : public Component, public DragAndDropTarget, public juce::SettableTooltipClient {
     ProgramListBox *pgmListBox;
     bool inDrag = false;
 
@@ -77,33 +77,48 @@ public:
         this->idx = idx;
         setWantsKeyboardFocus(true);
         setExplicitFocusOrder(idx+1);
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+        setTooltip("Double-click to load a patch. Use the arrow keys and Enter to browse.");
     }
 
     void paint(Graphics &g) override {
-        if ( inDrag ) {
-            g.fillAll(DXLookNFeel::background);
-            return;
-        }
-
-        if ( pgmListBox->hasContent == false )
+        if ( ! pgmListBox->hasContent || inDrag )
             return;
 
-        if ( idx == pgmListBox->activePgm ) {
-            g.setGradientFill(ColourGradient(DXLookNFeel::fillColour.brighter(3.0f), 0.0f, 0.0f, DXLookNFeel::fillColour.darker(0.5f), 0.0f, getHeight(), false));
-        } else if ( getCurrentlyFocusedComponent() == this ) {
-            g.setColour(DXLookNFeel::fillColour);
-        } else {
-            if ( idx % 2 == 0 ) {
-                auto alternateColour = DXLookNFeel::lightBackground.interpolatedWith (getLookAndFeel().findColour(ListBox::textColourId), 0.75f);
-                g.setColour(alternateColour);
-            } else {
-                auto alternateColour = DXLookNFeel::lightBackground.interpolatedWith (getLookAndFeel().findColour(ListBox::textColourId), 0.15f);
-                g.setColour(alternateColour);
-            }
+        const bool selected = idx == pgmListBox->activePgm;
+        const bool focused = hasKeyboardFocus(false);
+        const bool hovered = isMouseOver(false);
+        const auto bounds = getLocalBounds().toFloat().reduced(0.5f);
+        const auto accent = juce::Colour(0xff55d7c7);
+        const auto darkCard = juce::Colour(0xff17242d);
+
+        g.setColour(selected ? juce::Colour(0xff235d60)
+                             : hovered ? juce::Colour(0xff29404c)
+                                       : (idx % 2 == 0 ? darkCard : juce::Colour(0xff20303b)));
+        g.fillRoundedRectangle(bounds, 4.0f);
+
+        if (selected) {
+            g.setColour(accent);
+            g.fillRoundedRectangle(0.5f, 3.0f, 2.5f, juce::jmax(0.0f, (float)getHeight() - 6.0f), 1.0f);
         }
-        g.fillAll();
-        g.setColour(Colours::black);
-        g.drawFittedText(getProgramName(), 0, 0, getWidth(), getHeight(), Justification::centred, true);
+        if (focused || selected) {
+            g.setColour(focused ? juce::Colour(0xfff2b563) : accent.withAlpha(0.55f));
+            g.drawRoundedRectangle(bounds, 4.0f, focused ? 1.5f : 1.0f);
+        }
+
+        const bool compact = getWidth() < 69;
+        const int numberWidth = compact ? 19 : 26;
+        g.setColour(selected ? accent : juce::Colour(0xff8198a8));
+        g.setFont(juce::Font(10.5f, juce::Font::bold));
+        g.drawFittedText(juce::String(idx + 1).paddedLeft('0', 2),
+                         4, 1, numberWidth - 4, getHeight() - 2,
+                         juce::Justification::centredLeft, 1);
+
+        g.setColour(juce::Colour(0xffe8e6da));
+        g.setFont(juce::Font(11.5f, selected ? juce::Font::bold : juce::Font::plain));
+        g.drawFittedText(getProgramName().trim(),
+                         numberWidth, 1, juce::jmax(0, getWidth() - numberWidth - 4),
+                         getHeight() - 2, juce::Justification::centredLeft, 1, 0.7f);
     }
 
     void focusGained(FocusChangeType cause) override {
@@ -114,12 +129,15 @@ public:
         repaint();
     }
 
+    void mouseEnter(const MouseEvent&) override { repaint(); }
+    void mouseExit(const MouseEvent&) override { repaint(); }
+
     String getProgramName() {
         return pgmListBox->cartContent.getProgramName(idx);
     }
 
     void loadProgram() {
-        if ( ! pgmListBox->hasContent )
+        if ( ! pgmListBox->hasContent || pgmListBox->listener == nullptr )
             return;        
         pgmListBox->listener->programSelected(pgmListBox, idx);
     }
@@ -128,8 +146,10 @@ public:
         if ( ! pgmListBox->hasContent )
             return;
 
+        grabKeyboardFocus();
         if ( event.mods.isPopupMenu()) {
-            pgmListBox->listener->programRightClicked(pgmListBox, idx);
+            if (pgmListBox->listener != nullptr)
+                pgmListBox->listener->programRightClicked(pgmListBox, idx);
             return;
         }
         if ( event.getNumberOfClicks() == 2 )
@@ -182,12 +202,8 @@ public:
     void itemDropped(const SourceDetails& dragSourceDetails) override {
         inDrag = false;
 
-        Component *comp = dragSourceDetails.sourceComponent.get();
-        ProgramLabel *dest = dynamic_cast<ProgramLabel*>(comp);
-        jassert(dest);
-
         MemoryBlock* block = dragSourceDetails.description.getBinaryData();
-        if ( pgmListBox->listener != nullptr )
+        if ( block != nullptr && block->getSize() >= 128 && pgmListBox->listener != nullptr )
             pgmListBox->listener->programDragged(pgmListBox, idx, (char *)block->getData());
 
         repaint();
@@ -202,7 +218,7 @@ public:
         }
 
         virtual String getTitle() const override {
-            return String(program->idx + 1) + " " + program->getProgramName();
+            return "Patch " + String(program->idx + 1) + ": " + program->getProgramName();
         }
 
         ProgramLabel *program;

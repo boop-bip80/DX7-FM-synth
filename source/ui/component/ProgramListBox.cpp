@@ -22,8 +22,8 @@
 #include "PluginData.h"
 
 ProgramListBox::ProgramListBox(const String name, int numCols) : Component(name) {
-    cols = numCols;
-    rows = 32 / numCols;
+    cols = juce::jlimit(1, 32, numCols);
+    rows = 32 / cols;
     activePgm = -1;
     hasContent = false;
     readOnly = false;
@@ -41,13 +41,19 @@ ProgramListBox::ProgramListBox(const String name, int numCols) : Component(name)
 }
 
 void ProgramListBox::resized() {
+    if (getWidth() <= 0 || getHeight() <= 0)
+        return;
+
     cellWidth = (float) getWidth() / cols;
     cellHeight = (float) getHeight() / rows;
 
     for(int i=0;i<32;i++) {
         int targetCols = i / rows;
         int targetRow = i % rows;
-        labels[i].get()->setBounds(cellWidth*targetCols+1, cellHeight*targetRow+1, cellWidth-2, cellHeight-2);
+        labels[i].get()->setBounds(juce::roundToInt(cellWidth * targetCols + 1),
+                                   juce::roundToInt(cellHeight * targetRow + 1),
+                                   juce::roundToInt(cellWidth - 2),
+                                   juce::roundToInt(cellHeight - 2));
     }
 }
 
@@ -55,6 +61,12 @@ void ProgramListBox::setCartridge(Cartridge &cart) {
     cartContent = cart;
     cartContent.getProgramNames(programNames);
     hasContent = true;
+    for (int i = 0; i < 32; ++i) {
+        labels[i]->setTooltip("Patch " + juce::String(i + 1) + ": " +
+                              cartContent.getProgramName(i) +
+                              ". Double-click to load; drag to move or copy.");
+        labels[i]->repaint();
+    }
     repaint();
 }
 
@@ -63,7 +75,12 @@ void ProgramListBox::addListener(ProgramListBoxListener *listener) {
 }
 
 void ProgramListBox::setActive(int idx) {
+    const int previous = activePgm;
     activePgm = idx;
+    if (juce::isPositiveAndBelow(previous, 32))
+        labels[previous]->repaint();
+    if (juce::isPositiveAndBelow(activePgm, 32))
+        labels[activePgm]->repaint();
     repaint();
 }
 
@@ -76,36 +93,41 @@ bool ProgramListBox::keyPressed(const KeyPress &key, Component *originatingCompo
     if ( programLabel == nullptr ) 
         return false;
 
-    if ( key.isKeyCode(KeyPress::returnKey) ) {
+    if ( key.isKeyCode(KeyPress::returnKey) || key.isKeyCode(KeyPress::spaceKey) ) {
         activePgm = programLabel->idx;
-        if ( activePgm != -1 ) {
+        if ( activePgm != -1 && listener != nullptr ) {
             listener->programSelected(this, activePgm);
         }
         return true;
     }
 
     int currentIdx = programLabel->idx;
+    int column = currentIdx / rows;
+    int row = currentIdx % rows;
 
     if ( key.isKeyCode(KeyPress::upKey) ) {
-        currentIdx--;
-        if ( currentIdx < 0 )
-            currentIdx += rows;
+        row = (row + rows - 1) % rows;
     } else if ( key.isKeyCode(KeyPress::downKey) ) {
-        currentIdx++;
-        if ( currentIdx >= 32 )
-            currentIdx -= rows;
+        row = (row + 1) % rows;
     } else if ( key.isKeyCode(KeyPress::leftKey) ) {
-        currentIdx -= rows;
-        if ( currentIdx < 0 )
-            currentIdx += 32;
+        column = (column + cols - 1) % cols;
     } else if ( key.isKeyCode(KeyPress::rightKey) ) {
-        currentIdx += rows;
-        if ( currentIdx >= 32 )
-            currentIdx -= 32;
+        column = (column + 1) % cols;
+    } else if ( key.isKeyCode(KeyPress::homeKey) ) {
+        column = 0;
+        row = 0;
+    } else if ( key.isKeyCode(KeyPress::endKey) ) {
+        column = cols - 1;
+        row = rows - 1;
+    } else if ( key.isKeyCode(KeyPress::pageUpKey) ) {
+        row = 0;
+    } else if ( key.isKeyCode(KeyPress::pageDownKey) ) {
+        row = rows - 1;
     } else {
         return false;
     }
 
+    currentIdx = column * rows + row;
     labels[currentIdx]->grabKeyboardFocus();
 
     repaint();
@@ -113,5 +135,13 @@ bool ProgramListBox::keyPressed(const KeyPress &key, Component *originatingCompo
 }
 
 void ProgramListBox::paint(Graphics &g) {
-    g.fillAll(DXLookNFeel::background);
+    g.fillAll(juce::Colour(0xff0d151c));
+    g.setColour(juce::Colour(0xff39505e));
+    g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 5.0f, 1.0f);
+    if (!hasContent) {
+        g.setColour(juce::Colour(0xff9eafbf));
+        g.setFont(juce::Font(12.0f));
+        g.drawFittedText("Choose a cartridge to browse its 32 voices",
+                         getLocalBounds().reduced(8), juce::Justification::centred, 2);
+    }
 }

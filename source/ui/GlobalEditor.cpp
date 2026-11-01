@@ -276,28 +276,33 @@ GlobalEditor::GlobalEditor(DexedAudioProcessor &processor, juce::Component *pare
     addAndMakeVisible(initButton.get());
     initButton->setExplicitFocusOrder(3);
     initButton->setButtonText(TRANS("INIT"));
+    initButton->setTooltip("Initialize the current voice to a default FM patch.");
     initButton->setBounds(100, 111, 50, 30);
 
     parmButton.reset(new juce::TextButton("parmButton"));
     addAndMakeVisible(parmButton.get());
     parmButton->setExplicitFocusOrder(2);
-    parmButton->setButtonText(TRANS("PARM"));
+    parmButton->setButtonText(TRANS("SETUP"));
+    parmButton->setTooltip("Plugin preferences, MIDI connections and microtuning.");
     parmButton->setBounds(52, 111, 50, 30);
 
     cartButton.reset(new juce::TextButton("cartButton"));
     addAndMakeVisible(cartButton.get());
     cartButton->setExplicitFocusOrder(1);
-    cartButton->setButtonText(TRANS("CART"));
+    cartButton->setButtonText(TRANS("BANK"));
+    cartButton->setTooltip("Browse Yamaha DX7 SysEx cartridges and patches.");
     cartButton->setBounds(3, 111, 50, 30);
 
     storeButton.reset(new juce::TextButton("storeButton"));
     addAndMakeVisible(storeButton.get());
     storeButton->setExplicitFocusOrder(4);
     storeButton->setButtonText(TRANS("STORE"));
+    storeButton->setTooltip("Store the edited voice into the current cartridge.");
     storeButton->setBounds(270, 109, 50, 30);
 
     programSelector.reset(new ProgramSelector());
     addAndMakeVisible(programSelector.get());
+    programSelector->setTooltip("Select a voice in the current cartridge.");
     programSelector->setBounds(153, 115, 112, 18);
 
     aboutButton.reset(new juce::ImageButton());
@@ -340,6 +345,16 @@ GlobalEditor::GlobalEditor(DexedAudioProcessor &processor, juce::Component *pare
     contextMenuAdapter = std::make_unique<GlobalEditorContextMenu>(processor);
     addMouseListener(contextMenuAdapter.get(), true);
 
+    referenceLayout.reserve((size_t) getNumChildComponents());
+    for (int i = 0; i < getNumChildComponents(); ++i) {
+        auto* child = getChildComponent(i);
+        referenceLayout.emplace_back(child, child->getBounds());
+        if (auto* slider = dynamic_cast<DXSlider*>(child))
+            slider->setTooltip(child->getName() +
+                               ": drag to adjust, use arrow keys, or Shift + mouse wheel for fine changes.");
+    }
+    resized();
+
     //[/Constructor]
 }
 
@@ -360,13 +375,112 @@ GlobalEditor::~GlobalEditor() {
 
 //==============================================================================
 void GlobalEditor::paint(juce::Graphics& g) {
-    g.drawImage(background, 0, 0, 864, 144, 0, 0, 1728, 288);
-    g.drawImage(imageLight, 300, 70, 14, 14, 0, monoMode->getToggleState() ? 28 : 0, 28, 28);
-    g.drawImage(imageLight, 619, 102, 14, 14, 0, lfoSync->getToggleState() ? 28 : 0, 28, 28);
-    g.drawImage(imageLight, 705, 102, 14, 14, 0, oscSync->getToggleState() ? 28 : 0, 28, 28);
+    // Drawn in a virtual instrument coordinate system so text, separators
+    // and status indicators remain aligned with the scaled live controls.
+    juce::Graphics::ScopedSaveState saveState(g);
+    g.addTransform(juce::AffineTransform::scale(getWidth() / 864.0f,
+                                                getHeight() / 144.0f));
+
+    const auto base = juce::Colour(0xff101820);
+    const auto raised = juce::Colour(0xff17242d);
+    const auto card = juce::Colour(0xff20303b);
+    const auto text = juce::Colour(0xffe8e6da);
+    const auto muted = juce::Colour(0xff9eafbf);
+    const auto teal = juce::Colour(0xff55d7c7);
+    const auto amber = juce::Colour(0xfff2b563);
+
+    g.fillAll(base);
+    g.setGradientFill(juce::ColourGradient(raised.brighter(0.12f), 0.0f, 0.0f,
+                                          base, 0.0f, 144.0f, false));
+    g.fillRoundedRectangle(0.0f, 0.0f, 864.0f, 144.0f, 9.0f);
+
+    auto drawPanel = [&](float x, float width, juce::Colour stripe) {
+        auto bounds = juce::Rectangle<float>(x, 3.0f, width, 138.0f);
+        g.setColour(card.withAlpha(0.52f));
+        g.fillRoundedRectangle(bounds, 7.0f);
+        g.setColour(juce::Colour(0xff3b5060).withAlpha(0.65f));
+        g.drawRoundedRectangle(bounds, 7.0f, 0.8f);
+        g.setColour(stripe.withAlpha(0.9f));
+        g.fillRoundedRectangle(x + 9.0f, 3.0f, width - 18.0f, 2.0f, 1.0f);
+    };
+    drawPanel(3.0f, 144.0f, amber);
+    drawPanel(151.0f, 174.0f, teal);
+    drawPanel(329.0f, 219.0f, teal);
+    drawPanel(551.0f, 180.0f, amber);
+    drawPanel(734.0f, 127.0f, teal);
+
+    auto caption = [&](const juce::String& label, int x, int y, int width,
+                       juce::Justification alignment = juce::Justification::centred) {
+        g.setColour(muted);
+        g.setFont(juce::Font(8.0f, juce::Font::bold));
+        g.drawFittedText(label, x, y, width, 12, alignment, 1);
+    };
+
+    // Instrument identity, deliberately drawn rather than baked into a skin.
+    // The transparent About button above it retains its existing behaviour.
+    g.setColour(text);
+    g.setFont(juce::Font(30.0f, juce::Font::bold));
+    g.drawFittedText("FM", 13, 12, 65, 36, juce::Justification::centredLeft, 1);
+    g.setColour(teal);
+    g.drawFittedText("/7", 78, 12, 49, 36, juce::Justification::centredLeft, 1);
+    g.setColour(muted);
+    g.setFont(juce::Font(8.0f, juce::Font::bold));
+    g.drawFittedText("SIX-OPERATOR SYNTHESIS", 12, 49, 128, 13,
+                     juce::Justification::centredLeft, 1);
+    g.setColour(juce::Colour(0xff0d151c));
+    g.fillRoundedRectangle(7.0f, 82.0f, 137.0f, 29.0f, 4.0f);
+    g.setColour(juce::Colour(0xff45616a));
+    g.drawRoundedRectangle(7.0f, 82.0f, 137.0f, 29.0f, 4.0f, 0.8f);
+
+    // Keep all labels independent of localized image assets. Compact headings
+    // preserve the entire original DX7 parameter surface without tab hopping.
+    caption("TUNE", 190, 40, 35);
+    caption("CUTOFF", 228, 40, 46);
+    caption("RESO", 278, 40, 35);
+    caption("OUTPUT", 153, 93, 42);
+    caption("TRANSPOSE", 195, 93, 50);
+    caption("MONO", 250, 93, 49);
+    caption("ALGORITHM", 335, 9, 151, juce::Justification::centredLeft);
+    caption("SELECT", 495, 56, 45);
+    caption("FEEDBACK", 491, 116, 52);
+    caption("WAVE", 555, 34, 66);
+    caption("MOD SENS", 653, 34, 59);
+    caption("SPEED", 559, 85, 44);
+    caption("DELAY", 600, 85, 41);
+    caption("PITCH", 643, 85, 42);
+    caption("AMP", 685, 85, 37);
+    caption("LFO SYNC", 561, 119, 75);
+    caption("OSC SYNC", 645, 119, 78);
+    caption("PITCH ENVELOPE", 742, 41, 109);
+    caption("LEVEL", 735, 84, 40);
+    caption("RATE", 735, 122, 40);
+
+    auto led = [&](int x, int y, bool enabled) {
+        g.setColour((enabled ? teal : muted).withAlpha(enabled ? 0.23f : 0.11f));
+        g.fillEllipse((float) x - 3.0f, (float) y - 3.0f, 20.0f, 20.0f);
+        g.setColour(enabled ? teal : juce::Colour(0xff415762));
+        g.fillEllipse((float) x, (float) y, 14.0f, 14.0f);
+        g.setColour(juce::Colours::white.withAlpha(enabled ? 0.42f : 0.08f));
+        g.fillEllipse((float) x + 3.0f, (float) y + 2.0f, 4.0f, 4.0f);
+    };
+    led(300, 70, monoMode->getToggleState());
+    led(619, 102, lfoSync->getToggleState());
+    led(705, 102, oscSync->getToggleState());
 }
 
 void GlobalEditor::resized() {
+    if (referenceLayout.empty())
+        return;
+
+    const float scaleX = getWidth() / 864.0f;
+    const float scaleY = getHeight() / 144.0f;
+    for (const auto& item : referenceLayout) {
+        const auto& source = item.second;
+        item.first->setBounds(juce::roundToInt(source.getX() * scaleX),
+                              juce::roundToInt(source.getY() * scaleY),
+                              juce::roundToInt(source.getWidth() * scaleX),
+                              juce::roundToInt(source.getHeight() * scaleY));
+    }
 }
 
 void GlobalEditor::updateDisplay() {

@@ -22,8 +22,8 @@
 #include "../DXLookNFeel.h"
 
 void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link, char fb) {
-    const int LINE_SZ = 3;
-    String t(id);
+    const float LINE_SZ = 1.7f;
+    String t(static_cast<int>(id));
     bool opOn = opSwitch[id-1];
     
     x *= 25;
@@ -31,17 +31,9 @@ void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link,
     y *= 21;
     y += 5;
     
-    if ( opOn )
-        g.setColour(Colours::white);
-    else
-        g.setColour(DXLookNFeel::roundBackground);
-    
-    g.drawText(t, x, y, 16, 12, Justification::centred, true);
-    
-    if ( opOn )
-        g.setColour(DXLookNFeel::fillColour);
-    else
-        g.setColour(DXLookNFeel::roundBackground);
+    // Routing strokes go behind the operator chips. Colour changes convey
+    // bypass state without relying solely on an on/off indicator.
+    g.setColour(opOn ? Colour(0xff68c6bd) : Colour(0xff47545d));
     
     switch(link) {
         case 0 : // LINE DOWN
@@ -106,15 +98,48 @@ void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link,
             g.drawLine(x+8, y+15, x+8, y+12, LINE_SZ);
             break;
     }
+
+    const Colour operatorColours[6] = {
+        Colour(0xff68d9c6), Colour(0xff85baec), Colour(0xffe8b66e),
+        Colour(0xffbd9cf2), Colour(0xffe98d97), Colour(0xffb4d484)
+    };
+    const auto chip = Rectangle<float>((float)x - 1.0f, (float)y - 1.5f, 19.0f, 15.5f);
+    g.setColour(Colour(0xff10202a));
+    g.fillRoundedRectangle(chip, 3.0f);
+    g.setColour(opOn ? operatorColours[id - 1] : Colour(0xff53616c));
+    if (opOn)
+        g.fillRoundedRectangle(chip.reduced(1.5f), 2.3f);
+    else
+        g.drawRoundedRectangle(chip, 3.0f, 1.0f);
+    g.setColour(opOn ? Colour(0xff101820) : Colour(0xff95a1aa));
+    g.setFont(juce::Font(juce::FontOptions().withHeight(10.5f).withStyle("Bold")));
+    g.drawFittedText(t, chip.toNearestInt(), Justification::centred, 1);
     
 }
 
 void AlgoDisplay::paint(Graphics &g) {
-    g.setColour(DXLookNFeel::fillColour);
-    g.fillRect(1, 3, 20, 15);
-    int algo = algoValue;
-    g.setColour(Colours::white);
-    g.drawText(juce::String(algo), 1, 3, 20, 15, Justification::centred, true);
+    if (getWidth() <= 0 || getHeight() <= 0)
+        return;
+
+    const auto frame = getLocalBounds().toFloat().reduced(0.5f);
+    g.setGradientFill(ColourGradient(Colour(0xff20303b), 0.0f, 0.0f,
+                                      Colour(0xff101820), (float)getWidth(), (float)getHeight(), false));
+    g.fillRoundedRectangle(frame, 6.0f);
+    g.setColour(Colour(0xff3e5360));
+    g.drawRoundedRectangle(frame, 6.0f, 0.9f);
+
+    // Preserve all 32 original hardware routing diagrams, scaling their
+    // geometry uniformly to whatever space the global editor provides.
+    Graphics::ScopedSaveState state(g);
+    const float scale = jmin(getWidth() / 152.0f, getHeight() / 91.0f);
+    g.addTransform(AffineTransform::scale(scale).translated((getWidth() - 152.0f * scale) / 2.0f,
+                                                          (getHeight() - 91.0f * scale) / 2.0f));
+    const int algo = jlimit(1, 32, static_cast<int>(algoValue));
+    g.setColour(Colour(0xff55d7c7));
+    g.fillRoundedRectangle(2.0f, 3.0f, 20.0f, 16.0f, 3.5f);
+    g.setColour(Colour(0xff101820));
+    g.setFont(juce::Font(juce::FontOptions().withHeight(10.5f).withStyle("Bold")));
+    g.drawFittedText(juce::String(algo), 2, 3, 20, 16, Justification::centred, 1);
     
     switch(algo-1) {
         case 0:

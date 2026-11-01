@@ -39,16 +39,23 @@ static void comboBoxPopupMenuFinishedCallback(int result, ComboBoxImage* combo) 
 
 ComboBoxImage::ComboBoxImage() {
     itemPos[0] = -1;
+    itemHeight = 0;
 }
 
 void ComboBoxImage::paint(Graphics &g) {
+    if (items.isNull() || itemHeight <= 0)
+        return;
+
     int idx = getSelectedItemIndex();
     if ( itemPos[0] != -1 ) {
-        if ( idx < 4 )
+        if ( idx >= 0 && idx < 4 )
             idx = itemPos[idx];
     }
-    
-    g.drawImage(items, 0, 0, items.getWidth(), itemHeight, 0, idx * itemHeight, items.getWidth(), itemHeight);
+
+    if (idx < 0 || idx * itemHeight >= items.getHeight())
+        return;
+
+    g.drawImage(items, 0, 0, getWidth(), getHeight(), 0, idx * itemHeight, items.getWidth(), itemHeight);
 }
 
 void ComboBoxImage::showPopup() {
@@ -64,6 +71,8 @@ void ComboBoxImage::setImage(Image image) {
     items = image;
     
     int numItems = getNumItems();
+    if (numItems == 0 || image.isNull())
+        return;
     itemHeight = image.getHeight() / numItems;
 
     for(int i=0;i<numItems;i++) {
@@ -76,6 +85,8 @@ void ComboBoxImage::setImage(Image image, int pos[]) {
     items = image;
 
     int numItems = getNumItems();
+    if (numItems == 0 || image.isNull())
+        return;
     itemHeight = 26;
 
     for(int i=0;i<numItems;i++) {
@@ -88,27 +99,30 @@ void ComboBoxImage::setImage(Image image, int pos[]) {
 }
 
 void ProgramSelector::mouseDown(const MouseEvent &event) {
-    if ( event.x < getWidth() - 8) {
+    if (event.x < getWidth() - 24 || getNumItems() == 0) {
         ComboBox::mouseDown(event);
         return;
     }
     
     int cur = getSelectedItemIndex();
+    const int last = getNumItems() - 1;
     if ( event.y < getHeight() / 2 ) {
         if ( cur == 0 )
-            cur = 31;
+            cur = last;
         else
             cur--;
     } else {
-        if ( cur == 31 )
+        if ( cur == last )
             cur = 0;
         else
             cur++;
     }
-    setSelectedItemIndex(cur);
+    setSelectedItemIndex(jlimit(0, last, cur));
 }
 
 void ProgramSelector::mouseWheelMove(const MouseEvent &event, const MouseWheelDetails &wheel) {
+    if (getNumItems() == 0)
+        return;
     accum_wheel += wheel.deltaY;
 
     float wheelFactor = 0.2; // higher is slower
@@ -129,27 +143,44 @@ void ProgramSelector::mouseWheelMove(const MouseEvent &event, const MouseWheelDe
     if( up ) {
         accum_wheel -= sn * wheelFactor;
         int c = getSelectedItemIndex();
-        if( c == 31 ) c = 0;
+        if( c == getNumItems() - 1 ) c = 0;
         else c++;
         setSelectedItemIndex(c);
     }
     else if( dn ) {
         accum_wheel += sn * wheelFactor;
         int c = getSelectedItemIndex();
-        if( c == 0 ) c = 31;
+        if( c == 0 ) c = getNumItems() - 1;
         else c--;
-        setSelectedItemIndex(c);
+        setSelectedItemIndex(jlimit(0, getNumItems() - 1, c));
     }
 }
 
 void ProgramSelector::paint(Graphics &g) {
-    int x = getWidth();
-    int y = getHeight();
-    
-    Path path;
-    path.addTriangle(x-8, y/2-1, x-4, 2,   x, y/2-1);
-    path.addTriangle(x-8, y/2+1, x-4, y-2, x, y/2+1);
-    
-    g.setColour(Colours::white);
-    g.fillPath(path);
+    const float width = static_cast<float>(getWidth());
+    const float height = static_cast<float>(getHeight());
+    if (width < 30.0f || height < 12.0f)
+        return;
+
+    const auto bounds = getLocalBounds().toFloat().reduced(0.5f);
+    g.setColour(Colour(0xFF0D151C));
+    g.fillRoundedRectangle(bounds, 5.0f);
+    g.setColour(hasKeyboardFocus(true) ? DXLookNFeel::fillColour : Colour(0xFF49616B));
+    g.drawRoundedRectangle(bounds, 5.0f, hasKeyboardFocus(true) ? 1.6f : 1.0f);
+
+    g.setFont(juce::Font(jmax(11.0f, jmin(14.0f, height * 0.58f))));
+    g.setColour(Colour(0xFFE8E6DA));
+    g.drawFittedText(getText(), 10, 1, getWidth() - 36, getHeight() - 2,
+                     Justification::centredLeft, 1, 0.7f);
+
+    const float arrowCenterX = width - 12.0f;
+    Path arrows;
+    arrows.addTriangle(arrowCenterX, height * 0.16f,
+                       arrowCenterX - 4.0f, height * 0.41f,
+                       arrowCenterX + 4.0f, height * 0.41f);
+    arrows.addTriangle(arrowCenterX - 4.0f, height * 0.59f,
+                       arrowCenterX + 4.0f, height * 0.59f,
+                       arrowCenterX, height * 0.84f);
+    g.setColour(DXLookNFeel::fillColour);
+    g.fillPath(arrows);
 }

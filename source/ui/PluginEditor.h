@@ -37,6 +37,17 @@ class DexedAudioProcessorEditor  : public AudioProcessorEditor, public ComboBox:
     Component frameComponent;
     MidiKeyboardComponent midiKeyboard;
 
+    // The studio header is a quick-access performance surface; the full DX7
+    // parameter editors remain available beneath it without a mode change.
+    Label voiceNameLabel;
+    Label voiceNumberLabel;
+    TextButton previousVoiceButton { "PREV" };
+    TextButton nextVoiceButton { "NEXT" };
+    TextButton libraryButton { "LIBRARY" };
+    TextButton saveVoiceButton { "STORE" };
+    TextButton settingsButton { "SETUP" };
+    TextButton keyboardButton { "KEYS" };
+
     GlobalEditor global;
     std::unique_ptr<OperatorEditor> operators[6];
     Colour background;
@@ -44,12 +55,17 @@ class DexedAudioProcessorEditor  : public AudioProcessorEditor, public ComboBox:
     CartManager cartManager;
 
     // This cover is used to disable main window when cart manager is shown
-    Component cartManagerCover;
+    class ModalVeil : public Component {
+    public:
+        void paint(Graphics& g) override { g.fillAll(Colour(0xe8101820)); }
+    } cartManagerCover;
 
     SharedResourcePointer<DXLookNFeel> lookAndFeel;
     std::unique_ptr<juce::DialogWindow> dexedParameterDialog;
     std::unique_ptr<FileChooser> fileChooser;
     void resetSize();
+    void updateHeader();
+    void moveToProgram(int direction);
     void applyCart(Cartridge cart, File file);
     void storeProgramShowDialog(Cartridge destSysex, File externalFile);
     void storeProgramResponse(AlertWindow *dialog, int response, Cartridge destSysex, File externalFile, bool hasExternalFile);
@@ -81,8 +97,9 @@ public:
 
     bool keyPressed(const KeyPress& key, Component* originatingComponent) override;
 
-    static const int WINDOW_SIZE_X = 866;
-    static const int WINDOW_SIZE_Y = 674;
+    static const int WINDOW_SIZE_X = 1200;
+    static const int WINDOW_SIZE_Y = 842;
+    static const int KEYBOARD_AREA_HEIGHT = 86;
 
 private:
 #ifdef DEXED_EVENT_DEBUG

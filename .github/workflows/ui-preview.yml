@@ -1,0 +1,121 @@
+name: DX7 live UI screenshots
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/ui-preview.yml'
+      - '.github/workflows/capture-ui.sh'
+      - 'CMakeLists.txt'
+      - 'source/**'
+      - 'assets/ui/**'
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/ui-preview.yml'
+      - '.github/workflows/capture-ui.sh'
+      - 'CMakeLists.txt'
+      - 'source/**'
+      - 'assets/ui/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dx7-ui-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture-live-editor:
+    name: Build standalone and capture editor on Linux
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out source and JUCE submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install JUCE and screenshot dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libx11-dev libxinerama-dev libxext-dev \
+            libfreetype6-dev libglu1-mesa-dev libgtk-3-dev \
+            libwebkit2gtk-4.1-dev xvfb xdotool x11-utils imagemagick
+
+      - name: Configure lightweight standalone screenshot build
+        run: |
+          # JUCE enables LTO only for Release. RelWithDebInfo still optimizes
+          # the actual standalone but avoids a second 99+ LTRANS link in CI.
+          cmake -S . -B build-ui -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DDEXED_SKIP_VST3=ON -DDEXED_NO_ALSA=ON \
+            -DJUCE_COPY_PLUGIN_AFTER_BUILD=FALSE
+
+      - name: Compile the actual standalone instrument
+        run: cmake --build build-ui --config RelWithDebInfo --target Dexed_Standalone --parallel 3
+
+      - name: Locate standalone app
+        id: standalone
+        shell: bash
+        run: |
+          path="$(find build-ui/source/Dexed_artefacts -type f -name Dexed -perm /111 -print -quit)"
+          test -n "$path" && test -x "$path"
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Capture a real JUCE editor frame (not a mockup)
+        run: |
+          xvfb-run --auto-servernum --server-args='-screen 0 1600x1000x24' \
+            bash .github/workflows/capture-ui.sh \
+            '${{ steps.standalone.outputs.path }}' \
+            docs/screenshots/dx7-main.png
+
+      - name: Upload screenshot artifact for every run
+        uses: actions/upload-artifact@v4
+        with:
+          name: dx7-ui-screenshots
+          path: docs/screenshots/dx7-main.png
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-screenshot:
+    name: Commit verified screenshot to master
+    needs: capture-live-editor
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dx7-ui-screenshots
+          path: docs/screenshots
+
+      - name: Record the live editor image in the repository README path
+        shell: bash
+        run: |
+          # A screenshot of an obsolete commit must never overwrite a newer UI.
+          remote_sha="$(git ls-remote origin refs/heads/master | cut -f1)"
+          if [[ "$remote_sha" != "$GITHUB_SHA" ]]; then
+            echo 'Master advanced while the screenshot built; screenshot remains in the Actions artifact.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/screenshots/dx7-main.png
+          if git diff --cached --quiet; then
+            echo 'Screenshot is unchanged.'
+            exit 0
+          fi
+
+          git commit -m 'docs(ui): refresh live DX7 screenshot [skip ci]'
+          git push origin HEAD:master

@@ -48,6 +48,9 @@ public:
     virtual void drawLinearSlider (Graphics&, int x, int y, int width, int height,
                                  float sliderPos, float minSliderPos, float maxSliderPos,
                                  const Slider::SliderStyle, Slider&) override;
+    virtual void drawComboBox (Graphics&, int width, int height, bool isButtonDown,
+                               int buttonX, int buttonY, int buttonW, int buttonH,
+                               ComboBox&) override;
 
     //virtual Font getTextButtonFont(TextButton&, int buttonHeight) override;
     virtual Typeface::Ptr getTypefaceForFont(const Font &) override;

@@ -103,7 +103,7 @@ public:
 };
 
 class ProgramSelector : public ComboBox {
-    float accum_wheel;
+    float accum_wheel = 0.0f;
 public:
     ProgramSelector() {
         setWantsKeyboardFocus(true);

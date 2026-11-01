@@ -36,38 +36,89 @@ DexedAudioProcessorEditor::DexedAudioProcessorEditor (DexedAudioProcessor* owner
       cartManager(this), global(*ownerFilter, this) {
     processor = ownerFilter;
 
-    // We have to set size at startup because the keyboard doesnt show up before being added
+    // Set the host window size before attaching the keyboard so that hosts
+    // which query it during construction see the correct dimensions.
     resetSize();
     setExplicitFocusOrder(1);
 
-    frameComponent.setBounds(0,0, WINDOW_SIZE_X, (processor->showKeyboard ? WINDOW_SIZE_Y : WINDOW_SIZE_Y - 94));
+    frameComponent.setBounds(0, 0, WINDOW_SIZE_X,
+                             processor->showKeyboard ? WINDOW_SIZE_Y : WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT);
     addAndMakeVisible(&frameComponent);
     lookAndFeel->setDefaultLookAndFeel(lookAndFeel);
     background = lookAndFeel->background;
 
-    // OPERATORS
-    for (int i=0;i<6;i++) {
+    // A readable, musical command bar: everything here delegates to the
+    // existing program, cartridge and settings operations.
+    voiceNameLabel.setName("Current FM voice");
+    voiceNameLabel.setTitle("Current FM voice");
+    voiceNameLabel.setJustificationType(Justification::centredLeft);
+    voiceNameLabel.setFont(Font(23.0f, Font::bold));
+    voiceNameLabel.setColour(Label::textColourId, Colour(0xffe8e6da));
+    voiceNameLabel.setBounds(300, 18, 275, 30);
+    frameComponent.addAndMakeVisible(voiceNameLabel);
+
+    voiceNumberLabel.setName("Voice position and synthesis type");
+    voiceNumberLabel.setJustificationType(Justification::centredLeft);
+    voiceNumberLabel.setFont(Font(11.0f, Font::plain));
+    voiceNumberLabel.setColour(Label::textColourId, Colour(0xff8ba6ae));
+    voiceNumberLabel.setBounds(301, 50, 275, 19);
+    frameComponent.addAndMakeVisible(voiceNumberLabel);
+
+    auto styleToolbarButton = [this](TextButton& button, int x, int width, const String& help,
+                                     bool emphasized = false) {
+        button.setBounds(x, 21, width, 42);
+        button.setTooltip(help);
+        button.setColour(TextButton::buttonColourId,
+                         emphasized ? Colour(0xff22776f) : Colour(0xff273943));
+        button.setColour(TextButton::buttonOnColourId, Colour(0xff22776f));
+        button.setColour(TextButton::textColourOffId, Colour(0xffe8e6da));
+        button.setColour(TextButton::textColourOnId, Colour(0xffe8e6da));
+        frameComponent.addAndMakeVisible(button);
+    };
+
+    styleToolbarButton(previousVoiceButton, 592, 65, "Previous voice in the loaded cartridge");
+    styleToolbarButton(nextVoiceButton, 663, 65, "Next voice in the loaded cartridge");
+    styleToolbarButton(libraryButton, 741, 106, "Browse and import DX7 SysEx cartridges");
+    styleToolbarButton(saveVoiceButton, 855, 100, "Save this voice or cartridge", true);
+    styleToolbarButton(settingsButton, 963, 100, "MIDI, tuning, audio and UI preferences");
+    styleToolbarButton(keyboardButton, 1071, 112, "Show or hide the on-screen piano keyboard");
+
+    previousVoiceButton.onClick = [this]() { moveToProgram(-1); };
+    nextVoiceButton.onClick = [this]() { moveToProgram(1); };
+    libraryButton.onClick = [this]() { cartShow(); };
+    saveVoiceButton.onClick = [this]() { storeProgram(); };
+    settingsButton.onClick = [this]() { parmShow(); };
+    keyboardButton.setClickingTogglesState(true);
+    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
+    keyboardButton.onClick = [this]() {
+        processor->showKeyboard = keyboardButton.getToggleState();
+        processor->savePreference();
+        resetSize();
+    };
+
+    // The six operators form two uniform rows. Their editors own all sound
+    // controls, so no audio parameter bindings are moved or duplicated.
+    for (int i = 0; i < 6; ++i) {
         operators[i] = std::make_unique<OperatorEditor>(*processor, i);
         frameComponent.addAndMakeVisible(operators[i].get());
     }
-    operators[0]->setBounds(2, 1, 287, 218);
-    operators[1]->setBounds(290, 1, 287, 218);
-    operators[2]->setBounds(578, 1, 287, 218);
-    operators[3]->setBounds(2, 219, 287, 218);
-    operators[4]->setBounds(290, 219, 287, 218);
-    operators[5]->setBounds(578, 219, 287, 218);
+    constexpr int operatorColumns[] = { 16, 409, 802 };
+    for (int i = 0; i < 6; ++i)
+        operators[i]->setBounds(operatorColumns[i % 3], i < 3 ? 110 : 344, 381, 226);
 
-    // add the midi keyboard component..
+    // Retain the original fully playable MIDI keyboard.
     frameComponent.addAndMakeVisible (&midiKeyboard);
-
-    // The DX7 is a badass on the bass, keep it that way
     midiKeyboard.setLowestVisibleKey(24);
-    midiKeyboard.setBounds(4, 581, getWidth() - 8, 90);
+    midiKeyboard.setBounds(18, 766, WINDOW_SIZE_X - 36, 69);
     midiKeyboard.setTitle("Keyboard keys");
+    midiKeyboard.setColour(MidiKeyboardComponent::whiteNoteColourId, Colour(0xffe8e6da));
+    midiKeyboard.setColour(MidiKeyboardComponent::blackNoteColourId, Colour(0xff17242d));
+    midiKeyboard.setColour(MidiKeyboardComponent::keySeparatorLineColourId, Colour(0xff576b72));
+    midiKeyboard.setColour(MidiKeyboardComponent::keyDownOverlayColourId, Colour(0xff55d7c7));
 
-    // The global component
+    // Engine-wide algorithm, LFO, tuning and performance controls.
     frameComponent.addAndMakeVisible(&global);
-    global.setBounds(2,436,864,144);
+    global.setBounds(18, 594, WINDOW_SIZE_X - 36, 160);
     global.cartButton->onClick = [this]() { cartShow(); };
     global.parmButton->onClick = [this]() { parmShow(); };
     global.initButton->onClick = [this]() { initProgram(); };
@@ -95,15 +146,75 @@ DexedAudioProcessorEditor::~DexedAudioProcessorEditor() {
 
 //==============================================================================
 void DexedAudioProcessorEditor::paint (Graphics& g) {
-    g.setColour(background);
-    g.fillRoundedRectangle(0.0f, 0.0f, (float) getWidth(), (float) getHeight(), 0);
+    // Draw at logical coordinates, then apply the same user-selected scale as
+    // the child frame. Every vector border remains sharp on HiDPI hosts.
+    g.fillAll(Colour(0xff101820));
+    g.addTransform(AffineTransform::scale(static_cast<float>(getWidth()) / WINDOW_SIZE_X));
+
+    ColourGradient backdrop(Colour(0xff15232e), 600.0f, 0.0f,
+                            Colour(0xff0d151c), 600.0f, WINDOW_SIZE_Y, false);
+    g.setGradientFill(backdrop);
+    g.fillRect(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y);
+
+    g.setColour(Colour(0xff1a2b35));
+    g.fillRoundedRectangle(12.0f, 11.0f, 1176.0f, 67.0f, 11.0f);
+    g.setColour(Colour(0xff345360));
+    g.drawRoundedRectangle(12.5f, 11.5f, 1175.0f, 66.0f, 10.0f, 1.0f);
+
+    // An original product mark, intentionally not a recreation of another
+    // manufacturer's artwork or logo.
+    g.setColour(Colour(0xff55d7c7));
+    g.fillRoundedRectangle(25.0f, 22.0f, 4.0f, 43.0f, 2.0f);
+    g.setColour(Colour(0xffe8e6da));
+    g.setFont(Font(28.0f, Font::bold));
+    g.drawText("DX7", 40, 17, 93, 36, Justification::centredLeft);
+    g.setColour(Colour(0xff55d7c7));
+    g.setFont(Font(15.0f, Font::bold));
+    g.drawText("/ FM", 127, 24, 77, 23, Justification::centredLeft);
+    g.setColour(Colour(0xff8ba6ae));
+    g.setFont(Font(10.0f, Font::plain));
+    g.drawText("SIX-OPERATOR SYNTHESIZER", 40, 49, 230, 17, Justification::centredLeft);
+
+    g.setColour(Colour(0xff243842));
+    g.fillRoundedRectangle(286.0f, 17.0f, 293.0f, 55.0f, 7.0f);
+    g.setColour(Colour(0xff36515b));
+    g.drawRoundedRectangle(286.5f, 17.5f, 292.0f, 54.0f, 7.0f, 1.0f);
+
+    auto sectionHeader = [&g](const String& name, const String& helper, float top) {
+        g.setColour(Colour(0xff55d7c7));
+        g.fillRoundedRectangle(18.0f, top + 4.0f, 4.0f, 10.0f, 2.0f);
+        g.setColour(Colour(0xffe8e6da));
+        g.setFont(Font(13.0f, Font::bold));
+        g.drawText(name, 31, static_cast<int>(top), 350, 19, Justification::centredLeft);
+        g.setColour(Colour(0xff8298a3));
+        g.setFont(Font(10.0f, Font::plain));
+        g.drawText(helper, 570, static_cast<int>(top + 1), 612, 18, Justification::centredRight);
+    };
+    sectionHeader("OPERATOR LAB", "FREQUENCY  /  AMPLITUDE  /  ENVELOPES  /  KEY SCALING", 87.0f);
+    sectionHeader("PERFORMANCE & GLOBAL", "ALGORITHM  /  LFO  /  PITCH  /  OUTPUT", 574.0f);
+
+    // Subtle elevation separates the six editable sound modules.
+    g.setColour(Colour(0x30000000));
+    for (int row = 0; row < 2; ++row)
+        for (int col = 0; col < 3; ++col)
+            g.fillRoundedRectangle(18.0f + col * 393.0f, 114.0f + row * 234.0f,
+                                   381.0f, 226.0f, 9.0f);
+
+    if (processor->showKeyboard) {
+        g.setColour(Colour(0xff1a2b35));
+        g.fillRoundedRectangle(13.0f, 761.0f, 1174.0f, 78.0f, 8.0f);
+        g.setColour(Colour(0xff2e4852));
+        g.drawRoundedRectangle(13.5f, 761.5f, 1173.0f, 77.0f, 8.0f, 1.0f);
+    }
 }
 
 void DexedAudioProcessorEditor::cartShow() {
     stopTimer();
     cartManager.resetActiveSysex();
-    cartManagerCover.setBounds(0, 0, WINDOW_SIZE_X , WINDOW_SIZE_Y - 94);
-    cartManager.setBounds(16, 16, cartManagerCover.getWidth() - 32, cartManagerCover.getHeight() - 32);
+    cartManagerCover.setBounds(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT);
+    // The cartridge browser retains its deliberately compact 800px data grid.
+    // Centre it as a modal workspace instead of stretching its rows and cells.
+    cartManager.setBounds((WINDOW_SIZE_X - 844) / 2, 124, 844, 556);
     cartManager.updateCartFilename();
     cartManagerCover.setVisible(true);
     cartManager.initialFocus();
@@ -244,6 +355,7 @@ void DexedAudioProcessorEditor::initProgram() {
 void DexedAudioProcessorEditor::comboBoxChanged (ComboBox* comboBoxThatHasChanged) {
     processor->setCurrentProgram(global.programs->getSelectedId()-1);
     processor->updateHostDisplay();
+    updateHeader();
 }
 
 void DexedAudioProcessorEditor::timerCallback() {
@@ -279,6 +391,29 @@ void DexedAudioProcessorEditor::updateUI() {
     rebuildProgramCombobox();
     global.updateDisplay();
     cartManager.updateCartFilename();
+    updateHeader();
+}
+
+void DexedAudioProcessorEditor::updateHeader() {
+    auto name = processor->activeProgram.getName().trim();
+    voiceNameLabel.setText(name.isEmpty() ? "INIT VOICE" : name, dontSendNotification);
+
+    const int current = processor->getCurrentProgram() + 1;
+    const int count = processor->getNumPrograms();
+    voiceNumberLabel.setText("VOICE " + String(current).paddedLeft('0', 2)
+                            + " / " + String(count).paddedLeft('0', 2)
+                            + "     -     6 OP / 32 ALGORITHMS", dontSendNotification);
+}
+
+void DexedAudioProcessorEditor::moveToProgram(int direction) {
+    const int count = processor->getNumPrograms();
+    if (count <= 0)
+        return;
+
+    const int next = (processor->getCurrentProgram() + direction + count) % count;
+    processor->setCurrentProgram(next);
+    processor->updateHostDisplay();
+    updateUI();
 }
 
 void DexedAudioProcessorEditor::rebuildProgramCombobox() {
@@ -570,5 +705,10 @@ bool DexedAudioProcessorEditor::keyPressed(const KeyPress& key, Component* origi
 
 void DexedAudioProcessorEditor::resetSize() {
     float factor = processor->getZoomFactor();
-    setSize(WINDOW_SIZE_X * factor, (processor->showKeyboard ? WINDOW_SIZE_Y : WINDOW_SIZE_Y - 94) * factor);
+    const int logicalHeight = processor->showKeyboard ? WINDOW_SIZE_Y
+                                                      : WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT;
+    frameComponent.setBounds(0, 0, WINDOW_SIZE_X, logicalHeight);
+    midiKeyboard.setVisible(processor->showKeyboard);
+    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
+    setSize(roundToInt(WINDOW_SIZE_X * factor), roundToInt(logicalHeight * factor));
 }

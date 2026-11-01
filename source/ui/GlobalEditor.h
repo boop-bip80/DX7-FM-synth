@@ -26,6 +26,8 @@
 #include "component/VUMeter.h"
 #include "util/AudioComponentContainer.h"
 #include "component/ParameterObserver.h"
+#include <utility>
+#include <vector>
 
 #ifdef IMPLEMENT_MidiMonitor
 #include "SysexComm.h"
@@ -64,6 +66,11 @@ private:
     //[UserVariables]   -- You can add your own custom variables in this section.
     DexedAudioProcessor &processor;
     std::unique_ptr<ParameterObserver> observer;
+
+    // The controls have a carefully measured 864 x 144 reference layout.
+    // Keep the original coordinates for hit testing and resize the children
+    // directly when a host or the new editor shell changes the panel size.
+    std::vector<std::pair<juce::Component*, juce::Rectangle<int>>> referenceLayout;
 
     Image background;
     Image imageLight;
