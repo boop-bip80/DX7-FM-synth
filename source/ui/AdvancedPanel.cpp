@@ -120,7 +120,7 @@ public:
             addAndMakeVisible(c);
         env.setAccent(colour);
         env.setTooltip("Click to edit this envelope on the ENVELOPES tab");
-        env.addMouseListener(this, false);
+        addMouseListener(&selectListener, true);
         level.setKnobSize(60);
         contextMenu = std::make_unique<OperatorContextMenu>(processor, op);
         addMouseListener(contextMenu.get(), true);
@@ -128,7 +128,7 @@ public:
 
     ~OperatorStrip() override {
         removeMouseListener(contextMenu.get());
-        env.removeMouseListener(this);
+        removeMouseListener(&selectListener);
     }
 
     std::function<void(int)> onSelect;
@@ -148,15 +148,21 @@ public:
         env.repaint();
     }
 
-    void mouseDown(const MouseEvent& e) override {
-        if (e.mods.isPopupMenu())
-            return;
-        if (e.eventComponent == &env) {
-            if (onOpenEnvelope) onOpenEnvelope(op);
-            return;
+    /** Any click inside the strip selects its operator; a click on the
+        mini envelope opens the operator's envelope page. */
+    struct SelectListener : public MouseListener {
+        explicit SelectListener(OperatorStrip& s) : strip(s) {}
+        void mouseDown(const MouseEvent& e) override {
+            if (e.mods.isPopupMenu())
+                return;
+            if (e.eventComponent == &strip.env) {
+                if (strip.onOpenEnvelope) strip.onOpenEnvelope(strip.op);
+            } else if (strip.onSelect) {
+                strip.onSelect(strip.op);
+            }
         }
-        if (onSelect) onSelect(op);
-    }
+        OperatorStrip& strip;
+    };
 
     void resized() override {
         const int w = getWidth();
@@ -209,6 +215,7 @@ private:
     EnvDisplay env;
     LabeledKnob coarse, fine, detune, level, velocity, amSens, rateScale;
     std::unique_ptr<MouseListener> contextMenu;
+    SelectListener selectListener { *this };
 };
 
 //==============================================================================
