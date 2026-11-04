@@ -165,6 +165,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Ship the 80s LA Studio voice library (32 DX7 cartridges) as its own download next to the builds.
+          if [[ -d presets/80s-LA-Studio ]]; then
+            mkdir -p release-assets
+            (cd presets && zip -qr -9 ../release-assets/DX7-80s-LA-Studio-Presets.zip 80s-LA-Studio)
+            unzip -l release-assets/DX7-80s-LA-Studio-Presets.zip | tail -1
+          fi
           mapfile -d '' files < <(find release-assets -type f \( -name '*.zip' -o -name '*.dmg' -o -name '*.exe' \) -print0)
           (( ${#files[@]} > 0 )) || { echo 'No package files' >&2; exit 1; }
           # UI-Nightly is intentionally movable; versioned v* tags are not.
@@ -177,7 +183,7 @@ jobs:
           fi
           gh release upload UI-Nightly "${files[@]}" --clobber
           gh release edit UI-Nightly \
-            --notes "Built from ${GITHUB_SHA}. Check [workflow results](https://github.com/${GITHUB_REPOSITORY}/actions/workflows/project-pipeline.yml). The live screenshot is produced separately by ui-preview.yml."
+            --notes "Built from ${GITHUB_SHA}. Check [workflow results](https://github.com/${GITHUB_REPOSITORY}/actions/workflows/project-pipeline.yml). DX7-80s-LA-Studio-Presets.zip holds the 1,024-voice 80s LA Studio library (32 DX7 cartridges). The live screenshot is produced separately by ui-preview.yml."
 
   publish-release:
     name: Publish immutable versioned release

@@ -18,12 +18,33 @@ fi
 
 mkdir -p "$(dirname "$destination")"
 log_path="${RUNNER_TEMP:-/tmp}/dx7-screenshot-standalone.log"
+
+# Show the shipped 80s LA Studio library instead of the stock banks. On Linux the app reads its cartridges from
+# $XDG_DATA_HOME/DigitalSuburban/Dexed/Cartridges (PluginData.cpp) and opens Dexed_01.syx as the startup cartridge,
+# so an isolated, pre-seeded data directory makes the real editor start on voice 1 of cartridge LA01 with the whole
+# library available in the cartridge tree. Nothing is mocked: only the data the app loads differs.
+data_home=""
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+presets_dir="$script_dir/../../presets/80s-LA-Studio"
+if [[ -f "$presets_dir/01-Keys/LA01_Electric-Pianos-Classic-Tines.syx" ]]; then
+  data_home="$(mktemp -d)"
+  cart_dir="$data_home/DigitalSuburban/Dexed/Cartridges"
+  mkdir -p "$cart_dir"
+  cp -R "$presets_dir" "$cart_dir/80s-LA-Studio"
+  cp "$presets_dir/01-Keys/LA01_Electric-Pianos-Classic-Tines.syx" "$cart_dir/Dexed_01.syx"
+  export XDG_DATA_HOME="$data_home"
+  echo "Seeded $cart_dir with the 80s LA Studio library ($(find "$cart_dir" -name '*.syx' | wc -l) cartridges incl. startup copy)"
+else
+  echo "80s LA Studio presets not found; capturing with the stock cartridges."
+fi
+
 "$standalone" >"$log_path" 2>&1 &
 app_pid=$!
 
 cleanup() {
   kill "$app_pid" 2>/dev/null || true
   wait "$app_pid" 2>/dev/null || true
+  [[ -n "$data_home" ]] && rm -rf "$data_home"
 }
 trap cleanup EXIT
 
