@@ -16,7 +16,7 @@ DX7 FM Synth is a fork of [Dexed](https://github.com/asb2m10/dexed), the open-so
 
 ![DX7 FM Synth: vintage front panel with the advanced workspace open on the Overview tab](docs/screenshots/dx7-main.png)
 
-*Overview tab: the clickable algorithm chart and six colour-coded operator strips beneath the classic front panel.*
+*Overview tab: the clickable algorithm chart and six colour-coded operator strips beneath the classic front panel. The editor is showing voice 1 (`SUNSET EP`, algorithm 5) of the bundled [80s LA Studio library](#80s-la-studio-preset-library).*
 
 | Classic panel (workspace folded) | Envelopes |
 | :---: | :---: |
@@ -24,7 +24,7 @@ DX7 FM Synth is a fork of [Dexed](https://github.com/asb2m10/dexed), the open-so
 | **Modulation** | **Output** |
 | ![Modulation tab with LFO, performance controllers, pitch bend and portamento](docs/screenshots/dx7-modulation.png) | ![Output tab with filter response, amplifier, tuning and engine resolution](docs/screenshots/dx7-output.png) |
 
-*Screenshot provenance:* every image is a capture of the **actual compiled Linux JUCE standalone** running under Xvfb, not a mock-up. [`capture-ui.sh`](.github/workflows/capture-ui.sh) launches the app, clicks the real tabs and the ADVANCED fold, and captures each view. The [screenshot workflow](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/ui-preview.yml) repeats this on every UI change to `master`, commits refreshed images, and also uploads them as the **dx7-ui-screenshots** artifact.
+*Screenshot provenance:* every image is a capture of the **actual compiled Linux JUCE standalone** running under Xvfb, not a mock-up. [`capture-ui.sh`](.github/workflows/capture-ui.sh) launches the app, clicks the real tabs and the ADVANCED fold, and captures each view. The [screenshot workflow](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/ui-preview.yml) repeats this on every UI change to `master`, commits refreshed images, and also uploads them as the **dx7-ui-screenshots** artifact. The capture starts the app in an isolated data directory pre-seeded with the [80s LA Studio cartridges](presets/80s-LA-Studio) (cartridge LA01 as the startup bank), so the screenshots show a bundled voice instead of a stock bank; nothing else is altered.
 
 ## UI / UX tour
 
@@ -64,11 +64,12 @@ Binaries are built by GitHub Actions from this repository. The [**UI-Nightly rel
 | Windows | Installer (.exe) and plug-in ZIP: Standalone, VST3, CLAP | [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) or artifact **windows-bin** of the [latest run](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/project-pipeline.yml?query=branch%3Amaster) |
 | macOS | DMG and ZIP: Standalone, VST3, AU, CLAP (may be unsigned) | [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) or artifact **macos-bin** of the [latest run](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/project-pipeline.yml?query=branch%3Amaster) |
 | Linux | ZIP: Standalone, VST3, CLAP | [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) or artifact **linux-bin** of the [latest run](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/project-pipeline.yml?query=branch%3Amaster) |
+| 80s LA Studio presets | `DX7-80s-LA-Studio-Presets.zip`: 32 DX7 cartridges (.syx), 1,024 voices | [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) (or the [`presets/80s-LA-Studio`](presets/80s-LA-Studio) folder of this repo) |
 | UI screenshots | Live Linux standalone captures (PNG) | Artifact **dx7-ui-screenshots** of the [screenshot runs](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/ui-preview.yml?query=branch%3Amaster) |
 
 **About the filename:** installers are still named `Dexed-1.1.0-*`, and the installed plug-in and standalone window still identify as **Dexed**. That identity is kept deliberately so existing DAW projects and hosts keep finding the plug-in. This is not an installation mistake.
 
-**Current build with the new UI:** [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) was republished on November 4, 2026 from source [`5be0097`](https://github.com/boop-bip80/DX7-FM-synth/commit/5be009750c53547f561942d6d70821b404fe07d9). That is the vintage front panel and fold-out workspace shown above. Its five packages are Linux ZIP, Windows EXE and ZIP, and macOS DMG and ZIP. They come from [build run 41875529732](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529732), in which the Linux, Windows and macOS build jobs all passed.
+**Current build:** [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) was republished on November 4, 2026 from source [`e7649f7`](https://github.com/boop-bip80/DX7-FM-synth/commit/e7649f707794568c0926ca57f229f63d81b320e3), which carries the vintage front panel and fold-out workspace shown above plus the 80s LA Studio library. It holds six downloads: the Linux ZIP, Windows EXE and ZIP, macOS DMG and ZIP, and the `DX7-80s-LA-Studio-Presets.zip` voice pack. The five builds come from [build run 41895854515](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41895854515), in which the Linux, Windows and macOS build jobs all passed and the release job refreshed the assets. The UI itself is unchanged since `5be0097`; the audio engine and app code are untouched by the preset work.
 
 UI-Nightly is a rolling **pre-release**, not a claim of production certification or DAW validation. Workflow artifacts can expire and may require a GitHub sign-in.
 
@@ -109,9 +110,10 @@ On Linux, install the ALSA, X11, FreeType, OpenGL, GTK, JACK and libsndfile deve
 
 | Check | Evidence |
 | --- | --- |
-| Native CI compile and installer output | **Passed** for Linux, Windows and macOS at `5be0097`: [build run 41875529732](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529732) |
-| UI-Nightly publication | **Passed**: five refreshed packages; the release notes name source `5be0097` ([release](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly)) |
-| Live screenshots on GitHub's runner | **Passed** for `5be0097`: [screenshot run 41875529385](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529385) clicked through every tab; the bot refreshed the images in `8dfda60` |
+| Native CI compile and installer output | **Passed** for Linux, Windows and macOS at `e7649f7`: [build run 41895854515](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41895854515) |
+| UI-Nightly publication | **Passed**: six refreshed downloads (five builds + the preset pack); the `UI-Nightly` tag and release notes name source `e7649f7` ([release](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly)) |
+| Live screenshots on GitHub's runner | **Passed** for `e7649f7`: [screenshot run 41895854525](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41895854525) clicked through every tab with the 80s LA Studio library loaded; the bot refreshed the images in `d7fe50b` |
+| 80s LA Studio presets | 32 cartridges / 1,024 unique voices pass `tools/preset-lab/verify_presets.py` (framing, checksums, parameter ranges, names, audible and unclipped in the msfa engine); cartridge LA01 loads in the real compiled editor in the screenshots above |
 | Local compile and render checks | GCC and Clang builds with no warnings from the new UI code; every tab rendered, plus 125% zoom with the keyboard hidden |
 | Scripted interaction smoke test | Voice select, data entry +1, envelope point drag, algorithm-chart mute, strip-click operator selection, library and settings dialogs respond as intended |
 | DAW hosting, SysEx round-trips, audio behaviour, accessibility | Need separate manual verification; a screenshot alone does not establish correctness. See the [checklist](doc/DX7_UI_REDESIGN.md#completion-checklist) |

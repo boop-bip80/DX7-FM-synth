@@ -1,6 +1,6 @@
 # 80s LA Studio - 1,024 DX7 voices
 
-**1,024 voices in 32 DX7 32-voice SysEx cartridges**, organised the way a well-stocked Los Angeles studio of the 1980s would have been: keyboards, basses, brass, strings, pads, leads, mallets, guitars, voices, a full drum-and-percussion room, sound effects and rhythmic/motion patches. Every voice is a full six-operator DX7 patch (all 155 voice parameters) stored in the standard DX7 32-voice bulk-dump format, so the files should also open in any DX7-compatible editor or hardware (only tested here in the msfa engine this synth uses).
+**1,024 voices in 32 DX7 32-voice SysEx cartridges**, organised the way a well-stocked Los Angeles studio of the 1980s would have been: keyboards, basses, brass, strings, pads, leads, mallets, guitars, voices, a full drum-and-percussion room, sound effects and rhythmic/motion patches. Every voice is a full six-operator DX7 patch (all 155 voice parameters) stored in the standard DX7 32-voice bulk-dump format, so the files should also open in any DX7-compatible editor or hardware (tested in the msfa engine this synth uses; cartridge LA01 also loads in the real editor in the CI screenshots, but nothing has been tried on hardware).
 
 ## Loading them
 
