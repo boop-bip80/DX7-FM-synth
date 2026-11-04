@@ -64,7 +64,8 @@ These are **verification gates**, not claims that everything is complete:
 
 - [x] The redesigned editor compiles and launches as a Linux standalone, and real Xvfb screenshots of all four tabs and the folded classic view are captured by `.github/workflows/capture-ui.sh`, which clicks the real tabs.
 - [x] Scripted Xvfb interaction check: voice select, data entry +1, an envelope point drag, algorithm-chart operator mute, the cartridge library and the settings dialog all respond as intended.
-- [ ] Windows, macOS and Linux plug-in builds pass on GitHub Actions for the commit being inspected (see the README for the current run).
+- [x] Windows, macOS and Linux builds pass on GitHub Actions for `5be0097` ([build run 41875529732](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529732)), and UI-Nightly was republished from that commit. Host runtime is **not** independently tested.
+- [x] The screenshot workflow recaptured every tab on GitHub's runner for `5be0097` ([run 41875529385](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529385)).
 - [ ] Program browsing, SysEx import/export and keyboard shortcuts are checked manually in a DAW.
 - [ ] Rendering is checked at every UI zoom setting, with the keyboard and workspace both shown and hidden.
 - [ ] Plug-in controls remain linked to DSP and persist correctly in a DAW session.

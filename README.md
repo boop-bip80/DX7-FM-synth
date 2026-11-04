@@ -68,6 +68,8 @@ Binaries are built by GitHub Actions from this repository. The [**UI-Nightly rel
 
 **About the filename:** installers are still named `Dexed-1.1.0-*`, and the installed plug-in and standalone window still identify as **Dexed**. That identity is kept deliberately so existing DAW projects and hosts keep finding the plug-in. This is not an installation mistake.
 
+**Current build with the new UI:** [UI-Nightly](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly) was republished on November 4, 2026 from source [`5be0097`](https://github.com/boop-bip80/DX7-FM-synth/commit/5be009750c53547f561942d6d70821b404fe07d9). That is the vintage front panel and fold-out workspace shown above. Its five packages are Linux ZIP, Windows EXE and ZIP, and macOS DMG and ZIP. They come from [build run 41875529732](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529732), in which the Linux, Windows and macOS build jobs all passed.
+
 UI-Nightly is a rolling **pre-release**, not a claim of production certification or DAW validation. Workflow artifacts can expire and may require a GitHub sign-in.
 
 ## How to play and edit
@@ -101,9 +103,11 @@ On Linux, install the ALSA, X11, FreeType, OpenGL, GTK, JACK and libsndfile deve
 
 | Check | Evidence |
 | --- | --- |
-| Linux standalone compiles with GCC and Clang, launches, and renders every tab | Real Xvfb captures in [`docs/screenshots`](docs/screenshots), produced by clicking through the live app |
-| Scripted interaction smoke test | Voice select, data entry +1, envelope point drag, algorithm-chart mute, library and settings dialogs respond as intended |
-| Windows / macOS / Linux packages and UI-Nightly publication | See the [build pipeline runs](https://github.com/boop-bip80/DX7-FM-synth/actions/workflows/project-pipeline.yml?query=branch%3Amaster) for the commit being inspected |
+| Native CI compile and installer output | **Passed** for Linux, Windows and macOS at `5be0097`: [build run 41875529732](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529732) |
+| UI-Nightly publication | **Passed**: five refreshed packages; the release notes name source `5be0097` ([release](https://github.com/boop-bip80/DX7-FM-synth/releases/tag/UI-Nightly)) |
+| Live screenshots on GitHub's runner | **Passed** for `5be0097`: [screenshot run 41875529385](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41875529385) clicked through every tab; the bot refreshed the images in `8dfda60` |
+| Local compile and render checks | GCC and Clang builds with no warnings from the new UI code; every tab rendered, plus 125% zoom with the keyboard hidden |
+| Scripted interaction smoke test | Voice select, data entry +1, envelope point drag, algorithm-chart mute, strip-click operator selection, library and settings dialogs respond as intended |
 | DAW hosting, SysEx round-trips, audio behaviour, accessibility | Need separate manual verification; a screenshot alone does not establish correctness. See the [checklist](doc/DX7_UI_REDESIGN.md#completion-checklist) |
 
 Treat failed, skipped or missing jobs as incomplete work, not as passing.
