@@ -42,6 +42,10 @@ L.append(f"**{total:,} voices in {len(cat)} DX7 32-voice SysEx cartridges**, org
          "rhythmic/motion patches. Every voice is a full six-operator DX7 patch (all 155 voice parameters) stored in the standard DX7 32-voice bulk-dump "
          "format, so the files should also open in any DX7-compatible editor or hardware (tested in the msfa engine this synth uses; cartridge LA01 also loads in the real editor in the CI screenshots, but nothing has been tried on hardware).\n")
 L.append("## Loading them\n")
+L.append("**Built in:** every build of the app (standalone, VST3, AU, CLAP; Windows, macOS, Linux) carries this whole library and unpacks it into the "
+         "`Cartridges/80s-LA-Studio` folder the first time it starts - nothing to install. The unpack only happens when that folder does not exist, so "
+         "anything you edit, add or delete there is never overwritten; delete the folder to get the original set back on the next launch. "
+         "To load files by hand (for example from a checkout, or on a hardware-compatible editor):\n")
 L.append("1. **Library:** open the cartridge library (bars icon, `Ctrl+L`) and press **LOAD**, or drag a `.syx` onto the browser.\n"
          "2. **Permanent install:** copy the `80s-LA-Studio` folder into the app's `Cartridges` directory and it appears in the library tree.\n"
          "   * macOS: `~/Library/Application Support/DigitalSuburban/Dexed/Cartridges`\n"

@@ -4,6 +4,8 @@
 
 ## Loading them
 
+**Built in:** every build of the app (standalone, VST3, AU, CLAP; Windows, macOS, Linux) carries this whole library and unpacks it into the `Cartridges/80s-LA-Studio` folder the first time it starts - nothing to install. The unpack only happens when that folder does not exist, so anything you edit, add or delete there is never overwritten; delete the folder to get the original set back on the next launch. To load files by hand (for example from a checkout, or on a hardware-compatible editor):
+
 1. **Library:** open the cartridge library (bars icon, `Ctrl+L`) and press **LOAD**, or drag a `.syx` onto the browser.
 2. **Permanent install:** copy the `80s-LA-Studio` folder into the app's `Cartridges` directory and it appears in the library tree.
    * macOS: `~/Library/Application Support/DigitalSuburban/Dexed/Cartridges`

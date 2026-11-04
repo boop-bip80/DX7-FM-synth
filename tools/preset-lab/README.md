@@ -8,8 +8,11 @@ tools/preset-lab/build_renderer.sh          # builds build/dx7render from source
 python3 tools/preset-lab/build_presets.py   # recipes -> render -> balance -> audit -> write .syx + catalog.json  (~2 min)
 python3 tools/preset-lab/make_docs.py       # regenerate presets README and doc/80S_LA_STUDIO_PRESETS.md
 python3 tools/preset-lab/verify_presets.py  # re-read every shipped .syx and re-render it through the engine
-python3 tools/preset-lab/install_presets.py # copy the cartridges into the synth's Cartridges folder
+python3 tools/preset-lab/install_presets.py # copy the cartridges into the synth's Cartridges folder by hand
+python3 tools/preset-lab/make_bundle.py     # repack assets/la_studio_presets.zip, the copy compiled into every build
 ```
+
+**After changing any voice, run `build_presets.py` and then `make_bundle.py` and commit the new `assets/la_studio_presets.zip`.** CI fails the Linux build (`make_bundle.py --check`) if the compiled-in bundle differs from `presets/`.
 
 `build_presets.py --audit` runs every check without writing files; add `--range` to also render every voice at low/middle/high keys and soft/medium/hard velocity.
 
@@ -24,6 +27,7 @@ python3 tools/preset-lab/install_presets.py # copy the cartridges into the synth
 | `banks/` | The 32 cartridges: each voice is one builder call with named parameters. |
 | `renderer/`, `build_renderer.sh` | Offline renderer using the real `Dx7Note`/`FmCore` engine, honouring voice transpose exactly like `DexedAudioProcessor`. |
 | `audit.py`, `lab.py`, `viz.py` | Rendering, loudness balancing, silence/clip/pitch checks, spectral + modulation fingerprints for near-duplicate detection, spectrogram sheets. |
+| `make_bundle.py` | Packs the 32 cartridges into `assets/la_studio_presets.zip` (deterministic), which `assets/CMakeLists.txt` embeds in the binary and `DexedAudioProcessor::resolvAppDir()` unpacks on first launch. `--check` verifies bundle == `presets/`. |
 | `audit_bank.py` | Audition one bank: `python3 audit_bank.py keys 0` prints metrics and writes `build/bank_sheet.png`. |
 
 ## What the measurements established
