@@ -35,41 +35,39 @@ public:
         }
     }
 
+    void mouseExit(const juce::MouseEvent &event) override {
+        if ( parameter != nullptr && event.eventComponent != nullptr
+             && event.eventComponent->getName() == parameter->getParameterID() ) {
+            parameter = nullptr;
+            repaint();
+        }
+    }
+
     void paint(juce::Graphics &g) override {
-        const auto ivory = juce::Colour(0xffe8e6da);
-        const auto muted = juce::Colour(0xff9eafbf);
-        const auto accent = juce::Colour(0xff55d7c7);
+        const auto ivory = juce::Colour(0xffdedcd6);
+        const auto muted = juce::Colour(0xff8c8a86);
+        const auto accent = juce::Colour(0xff5ad4a6);
         const int height = getHeight();
 
-        // The parameter inspector doubles as a compact idle-ready indicator.
-        // It replaces the old unstyled development-build string without
-        // changing the plugin identity or any parameter binding.
-        g.setColour(accent);
-        g.fillEllipse(2.0f, (height - 5.0f) * 0.5f, 5.0f, 5.0f);
-
+        // Status-bar readout of the control under the pointer.
         juce::RangedAudioParameter *param = parameter;
         if (param == nullptr) {
-            g.setColour(ivory);
-            g.setFont(juce::Font(10.0f, juce::Font::bold));
-            g.drawFittedText("DX7 FM", 13, 0, getWidth() - 69, height,
-                             juce::Justification::centredLeft, 1);
-            g.setColour(accent);
-            g.setFont(juce::Font(9.2f, juce::Font::bold));
-            g.drawFittedText("READY", getWidth() - 56, 0, 52, height,
-                             juce::Justification::centredRight, 1);
+            g.setColour(muted);
+            g.setFont(juce::Font(juce::FontOptions().withHeight(11.0f)));
+            g.drawFittedText("Hover a control to see its name and value. Right-click a control for MIDI learn.",
+                             0, 0, getWidth(), height, juce::Justification::centredLeft, 1);
             return;
         }
 
-        g.setColour(muted);
-        g.setFont(juce::Font(9.6f, juce::Font::bold));
-        g.drawFittedText(param->getName(100).toUpperCase(),
-                         13, 0, juce::jmax(0, getWidth() - 71), height,
-                         juce::Justification::centredLeft, 1, 0.75f);
+        const auto name = param->getName(100);
+        g.setFont(juce::Font(juce::FontOptions().withHeight(11.5f).withStyle("Bold")));
+        const int nameWidth = juce::jmin(getWidth() - 80,
+            juce::roundToInt(juce::GlyphArrangement::getStringWidth(g.getCurrentFont(), name)) + 4);
+        g.setColour(ivory);
+        g.drawFittedText(name, 0, 0, nameWidth, height, juce::Justification::centredLeft, 1);
         g.setColour(accent);
-        g.setFont(juce::Font(10.4f, juce::Font::bold));
-        g.drawFittedText(param->getCurrentValueAsText(),
-                         getWidth() - 59, 0, 55, height,
-                         juce::Justification::centredRight, 1, 0.7f);
+        g.drawFittedText(param->getCurrentValueAsText(), nameWidth + 10, 0, 120, height,
+                         juce::Justification::centredLeft, 1);
     }
 
     void valueTreePropertyChanged(juce::ValueTree &treeWhosePropertyHasChanged, const juce::Identifier &property) override {

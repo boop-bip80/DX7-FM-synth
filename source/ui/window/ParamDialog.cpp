@@ -398,7 +398,7 @@ void ParamDialog::paint (juce::Graphics& g) {
 
     //[/UserPrePaint]
 
-    g.fillAll (juce::Colour (0xff3c322f)); {
+    g.fillAll (juce::Colour (0xff2a2b2f)); {
         int x = 20, y = 16, width = 276, height = 23;
         juce::String text (TRANS ("Pitch Bend Range"));
         juce::Colour fillColour = juce::Colours::white;

@@ -57,13 +57,13 @@ public:
     }
 
     void paint(juce::Graphics &g) override {
-        auto bounds = getLocalBounds().toFloat();
-        g.setColour(juce::Colour(0xff102027));
-        g.fillRoundedRectangle(bounds, 2.7f);
-        g.setColour(juce::Colour(0xff405d67));
-        g.drawRoundedRectangle(bounds.reduced(0.4f), 2.7f, 0.7f);
-        g.setColour(juce::Colour(0xff79e7d8));
-        g.setFont(juce::Font(juce::FontOptions().withHeight(11.0f).withStyle("Bold")));
+        auto bounds = getLocalBounds().toFloat().reduced(0.5f);
+        g.setColour(juce::Colour(0xff141517));
+        g.fillRoundedRectangle(bounds, 3.5f);
+        g.setColour(juce::Colour(0xff3c3d42));
+        g.drawRoundedRectangle(bounds, 3.5f, 1.0f);
+        g.setColour(juce::Colour(0xffe4e3df));
+        g.setFont(juce::Font(juce::FontOptions().withHeight(juce::jmin(15.0f, getHeight() * 0.62f)).withStyle("Bold")));
         g.drawFittedText(message, 2, 1, getWidth() - 4, getHeight() - 2,
                          juce::Justification::centred, 1);
     }

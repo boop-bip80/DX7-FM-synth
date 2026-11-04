@@ -160,13 +160,13 @@ void VuMeterBase::paint(Graphics& g) {
     if (ledWidth <= 0.15f || ledHeight <= 0.5f)
         return;
 
-    const auto teal = Colour(0xFF55D7C7);
-    const auto amber = Colour(0xFFF2B563);
-    const auto warmPeak = Colour(0xFFFFD397);
-    const auto inactive = Colour(0xFF293C47);
+    const auto teal = Colour(0xFF5AD4A6);
+    const auto amber = Colour(0xFFF0B35E);
+    const auto warmPeak = Colour(0xFFFF6A55);
+    const auto inactive = Colour(0xFF2C2D31);
     const bool outputMeter = mindB > -45; // +6 dB output versus 0 dB operators
 
-    g.setColour(Colour(0xFF0D171F));
+    g.setColour(Colour(0xFF121315));
     g.fillRoundedRectangle(bounds, jmin(3.0f, bounds.getHeight() * 0.35f));
 
     const float radius = jmin(0.8f, ledWidth * 0.35f);
@@ -191,7 +191,7 @@ void VuMeterBase::paint(Graphics& g) {
         ledX += ledWidth + gap;
     }
 
-    g.setColour(Colour(0xFF405863).withAlpha(0.55f));
+    g.setColour(Colour(0xFF3C3D42).withAlpha(0.8f));
     g.drawRoundedRectangle(bounds.reduced(0.35f),
                            jmin(3.0f, bounds.getHeight() * 0.35f), 0.65f);
 }

@@ -23,6 +23,7 @@
 
 #include "PluginProcessor.h"
 #include "ui/PluginEditor.h"
+#include "ui/component/VUMeter.h"
 #include "parameter/Model.h"
 
 #include "debugger/Logger.h"

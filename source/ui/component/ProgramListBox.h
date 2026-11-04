@@ -89,12 +89,12 @@ public:
         const bool focused = hasKeyboardFocus(false);
         const bool hovered = isMouseOver(false);
         const auto bounds = getLocalBounds().toFloat().reduced(0.5f);
-        const auto accent = juce::Colour(0xff55d7c7);
-        const auto darkCard = juce::Colour(0xff17242d);
+        const auto accent = juce::Colour(0xff5ad4a6);
+        const auto darkCard = juce::Colour(0xff2a2b2f);
 
-        g.setColour(selected ? juce::Colour(0xff235d60)
-                             : hovered ? juce::Colour(0xff29404c)
-                                       : (idx % 2 == 0 ? darkCard : juce::Colour(0xff20303b)));
+        g.setColour(selected ? juce::Colour(0xff2e6b56)
+                             : hovered ? juce::Colour(0xff3a3b40)
+                                       : (idx % 2 == 0 ? darkCard : juce::Colour(0xff313236)));
         g.fillRoundedRectangle(bounds, 4.0f);
 
         if (selected) {
@@ -102,19 +102,19 @@ public:
             g.fillRoundedRectangle(0.5f, 3.0f, 2.5f, juce::jmax(0.0f, (float)getHeight() - 6.0f), 1.0f);
         }
         if (focused || selected) {
-            g.setColour(focused ? juce::Colour(0xfff2b563) : accent.withAlpha(0.55f));
+            g.setColour(focused ? juce::Colour(0xfff0b35e) : accent.withAlpha(0.55f));
             g.drawRoundedRectangle(bounds, 4.0f, focused ? 1.5f : 1.0f);
         }
 
         const bool compact = getWidth() < 69;
         const int numberWidth = compact ? 19 : 26;
-        g.setColour(selected ? accent : juce::Colour(0xff8198a8));
+        g.setColour(selected ? accent : juce::Colour(0xff9a9995));
         g.setFont(juce::Font(10.5f, juce::Font::bold));
         g.drawFittedText(juce::String(idx + 1).paddedLeft('0', 2),
                          4, 1, numberWidth - 4, getHeight() - 2,
                          juce::Justification::centredLeft, 1);
 
-        g.setColour(juce::Colour(0xffe8e6da));
+        g.setColour(juce::Colour(0xffe4e3df));
         g.setFont(juce::Font(11.5f, selected ? juce::Font::bold : juce::Font::plain));
         g.drawFittedText(getProgramName().trim(),
                          numberWidth, 1, juce::jmax(0, getWidth() - numberWidth - 4),

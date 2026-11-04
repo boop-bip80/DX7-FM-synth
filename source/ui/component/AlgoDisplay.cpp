@@ -20,6 +20,7 @@
 
 #include "AlgoDisplay.h"
 #include "../DXLookNFeel.h"
+#include "../VintageTheme.h"
 
 void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link, char fb) {
     const float LINE_SZ = 1.7f;
@@ -33,7 +34,7 @@ void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link,
     
     // Routing strokes go behind the operator chips. Colour changes convey
     // bypass state without relying solely on an on/off indicator.
-    g.setColour(opOn ? Colour(0xff68c6bd) : Colour(0xff47545d));
+    g.setColour(opOn ? Colour(0xffcfcdc6) : Colour(0xff55565b));
     
     switch(link) {
         case 0 : // LINE DOWN
@@ -99,22 +100,54 @@ void AlgoDisplay::displayOp(juce::Graphics &g, char id, int x, int y, char link,
             break;
     }
 
-    const Colour operatorColours[6] = {
-        Colour(0xff68d9c6), Colour(0xff85baec), Colour(0xffe8b66e),
-        Colour(0xffbd9cf2), Colour(0xffe98d97), Colour(0xffb4d484)
-    };
     const auto chip = Rectangle<float>((float)x - 1.0f, (float)y - 1.5f, 19.0f, 15.5f);
-    g.setColour(Colour(0xff10202a));
+    chipBounds[id - 1] = chip;
+    const bool selected = (id - 1) == selectedOp;
+    const auto colour = vt::operatorColour(id - 1);
+    if (selected) {
+        g.setColour(colour.withAlpha(0.35f));
+        g.fillRoundedRectangle(chip.expanded(2.5f), 4.5f);
+    }
+    g.setColour(Colour(0xff17181a));
     g.fillRoundedRectangle(chip, 3.0f);
-    g.setColour(opOn ? operatorColours[id - 1] : Colour(0xff53616c));
+    g.setColour(opOn ? colour : Colour(0xff5a5b60));
     if (opOn)
-        g.fillRoundedRectangle(chip.reduced(1.5f), 2.3f);
+        g.fillRoundedRectangle(chip.reduced(1.2f), 2.3f);
     else
-        g.drawRoundedRectangle(chip, 3.0f, 1.0f);
-    g.setColour(opOn ? Colour(0xff101820) : Colour(0xff95a1aa));
+        g.drawRoundedRectangle(chip.reduced(0.5f), 3.0f, 1.0f);
+    if (selected) {
+        g.setColour(Colours::white);
+        g.drawRoundedRectangle(chip.expanded(1.0f), 3.6f, 1.2f);
+    }
+    g.setColour(opOn ? Colour(0xff15161a) : Colour(0xff9a9995));
     g.setFont(juce::Font(juce::FontOptions().withHeight(10.5f).withStyle("Bold")));
     g.drawFittedText(t, chip.toNearestInt(), Justification::centred, 1);
-    
+}
+
+int AlgoDisplay::operatorAt(juce::Point<float> position) const {
+    const auto design = position.transformedBy(designTransform.inverted());
+    for (int i = 0; i < 6; ++i)
+        if (chipBounds[i].expanded(2.0f).contains(design))
+            return i;
+    return -1;
+}
+
+void AlgoDisplay::mouseDown(const juce::MouseEvent &event) {
+    const int op = operatorAt(event.position);
+    if (op < 0)
+        return;
+
+    if (event.mods.isPopupMenu()) {
+        if (auto *param = apvts.getParameter(IDs::on.op(op).name)) {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost(param->getValue() > 0.5f ? 0.0f : 1.0f);
+            param->endChangeGesture();
+        }
+        return;
+    }
+
+    if (onOperatorSelected)
+        onOperatorSelected(op);
 }
 
 void AlgoDisplay::paint(Graphics &g) {
@@ -122,25 +155,43 @@ void AlgoDisplay::paint(Graphics &g) {
         return;
 
     const auto frame = getLocalBounds().toFloat().reduced(0.5f);
-    g.setGradientFill(ColourGradient(Colour(0xff20303b), 0.0f, 0.0f,
-                                      Colour(0xff101820), (float)getWidth(), (float)getHeight(), false));
+    g.setColour(vt::deckInset);
     g.fillRoundedRectangle(frame, 6.0f);
-    g.setColour(Colour(0xff3e5360));
-    g.drawRoundedRectangle(frame, 6.0f, 0.9f);
+    g.setColour(vt::deckLine);
+    g.drawRoundedRectangle(frame, 6.0f, 1.0f);
 
-    // Preserve all 32 original hardware routing diagrams, scaling their
-    // geometry uniformly to whatever space the global editor provides.
-    Graphics::ScopedSaveState state(g);
-    const float scale = jmin(getWidth() / 152.0f, getHeight() / 91.0f);
-    g.addTransform(AffineTransform::scale(scale).translated((getWidth() - 152.0f * scale) / 2.0f,
-                                                          (getHeight() - 91.0f * scale) / 2.0f));
+    // Subtle dot grid behind the routing, like a schematic worksheet.
+    g.setColour(Colours::white.withAlpha(0.035f));
+    for (float gy = frame.getY() + 8.0f; gy < frame.getBottom() - 4.0f; gy += 12.0f)
+        for (float gx = frame.getX() + 8.0f; gx < frame.getRight() - 4.0f; gx += 12.0f)
+            g.fillEllipse(gx - 0.8f, gy - 0.8f, 1.6f, 1.6f);
+
+    // Preserve all 32 original hardware routing diagrams. A dry run records
+    // where the operator chips land so each algorithm is scaled to fill the
+    // available space instead of sitting in a fixed 152 x 91 grid.
     const int algo = jlimit(1, 32, static_cast<int>(algoValue));
-    g.setColour(Colour(0xff55d7c7));
-    g.fillRoundedRectangle(2.0f, 3.0f, 20.0f, 16.0f, 3.5f);
-    g.setColour(Colour(0xff101820));
-    g.setFont(juce::Font(juce::FontOptions().withHeight(10.5f).withStyle("Bold")));
-    g.drawFittedText(juce::String(algo), 2, 3, 20, 16, Justification::centred, 1);
-    
+    for (auto& chip : chipBounds)
+        chip = {};
+    {
+        Image scratch(Image::ARGB, 1, 1, true);
+        Graphics dry(scratch);
+        drawAlgorithm(dry, algo);
+    }
+    Rectangle<float> extent = chipBounds[0];
+    for (auto& chip : chipBounds)
+        extent = extent.getUnion(chip);
+    extent = extent.expanded(8.0f, 9.0f);
+
+    Graphics::ScopedSaveState state(g);
+    const float scale = jmin((getWidth() - 20.0f) / extent.getWidth(), (getHeight() - 20.0f) / extent.getHeight(), 3.2f);
+    designTransform = AffineTransform::translation(-extent.getCentreX(), -extent.getCentreY())
+                          .scaled(scale)
+                          .translated(getWidth() * 0.5f, getHeight() * 0.5f);
+    g.addTransform(designTransform);
+    drawAlgorithm(g, algo);
+}
+
+void AlgoDisplay::drawAlgorithm(Graphics &g, int algo) {
     switch(algo-1) {
         case 0:
             displayOp(g, 6, 3, 0, 0, 1);

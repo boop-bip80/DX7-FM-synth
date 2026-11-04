@@ -159,6 +159,7 @@ public :
     float vuSignal;
     double vuDecayFactor = 0.999361; // (for 48 kHz sampling rate)
     bool showKeyboard;
+    bool showAdvanced = true;   // advanced workspace unfolded below the front panel
     int getEngineType();
     void setEngineType(int rs);
 

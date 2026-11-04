@@ -135,11 +135,11 @@ bool ProgramListBox::keyPressed(const KeyPress &key, Component *originatingCompo
 }
 
 void ProgramListBox::paint(Graphics &g) {
-    g.fillAll(juce::Colour(0xff0d151c));
-    g.setColour(juce::Colour(0xff39505e));
+    g.fillAll(juce::Colour(0xff17181a));
+    g.setColour(juce::Colour(0xff3c3d42));
     g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(0.5f), 5.0f, 1.0f);
     if (!hasContent) {
-        g.setColour(juce::Colour(0xff9eafbf));
+        g.setColour(juce::Colour(0xff9a9995));
         g.setFont(juce::Font(12.0f));
         g.drawFittedText("Choose a cartridge to browse its 32 voices",
                          getLocalBounds().reduced(8), juce::Justification::centred, 2);

@@ -34,6 +34,10 @@ void DexedAudioProcessor::loadPreference() {
         showKeyboard = prop.getIntValue( String("showKeyboard") );
     }
 
+    if ( prop.containsKey( String("showAdvanced") ) ) {
+        showAdvanced = prop.getIntValue( String("showAdvanced") );
+    }
+
     if ( prop.containsKey( String("zoomFactor") ) ) {
         zoomFactor = prop.getDoubleValue(String("zoomFactor"));
     }
@@ -57,6 +61,7 @@ void DexedAudioProcessor::savePreference() {
     prop.setValue(String("sysexChl"), sysexComm.getChl());
 
     prop.setValue(String("showKeyboard"), showKeyboard);
+    prop.setValue(String("showAdvanced"), showAdvanced);
 
     prop.setValue(String("zoomFactor"), zoomFactor);
 

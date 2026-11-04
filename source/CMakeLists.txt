@@ -67,15 +67,17 @@ target_sources(${BaseTargetName} PRIVATE
     ui/PluginEditor.cpp
 		ui/window/CartManager.cpp
 	ui/DXLookNFeel.cpp
-    ui/GlobalEditor.cpp
-	ui/OperatorEditor.cpp
+	ui/HardwarePanel.cpp
+	ui/AdvancedPanel.cpp
 		ui/window/ParamDialog.cpp
 		ui/window/TuningShow.cpp
 	ui/component/AlgoDisplay.cpp
+	ui/component/DeckWidgets.cpp
 	ui/component/DXComponents.cpp
 	ui/component/EnvDisplay.cpp
 	ui/component/ProgramListBox.cpp
 	ui/component/VUMeter.cpp
+	ui/component/VintageControls.cpp
 
 	midi/SysexComm.cpp
 	midi/PluginMidi.cpp

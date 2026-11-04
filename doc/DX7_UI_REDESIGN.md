@@ -1,54 +1,73 @@
-# DX7 FM Synth — UI/UX redesign specification
+# DX7 FM Synth — UI/UX design specification
 
-This is an independent visual redesign of the **Dexed-derived** DX7 editor. The goal is to make six-operator FM programming approachable without losing the original hardware's parameter model, SysEx workflow, or musicians' muscle memory. Arturia's DX7 V is a quality/usability reference, **not** a source of assets, logos, or code; this project is not affiliated with Arturia or Yamaha.
+This is an independent redesign of the **Dexed-derived** DX7 editor. It takes the *interaction model* of modern hardware emulations such as Arturia's DX7 V as its reference: a classic front panel that you can play like the original keyboard, plus an expandable advanced workspace for deep editing.
+
+The reference is used for **layout and workflow ideas only**. Arturia's artwork, photographs, logos, fonts, code and product names are not used. Every element in this editor is drawn with JUCE vector primitives from original code in this repository. The project is not affiliated with or endorsed by Arturia or Yamaha.
+
+## Information architecture
+
+| Level | Region | What it is for |
+| --- | --- | --- |
+| 1 | **Upper toolbar** | Main menu, cartridge library, preset name with voice list, previous/next voice, store voice, settings |
+| 2 | **Front panel** | Play and audition: volume, data entry with −1/+1, voice LED and two-line LCD, mode switches (cartridge, store, init, function), 32 voice-select membrane switches, operator on/off, algorithm and feedback steppers |
+| 3 | **Advanced workspace** (fold-out) | Deep editing in four tabs: Overview, Envelopes, Modulation, Output |
+| 4 | **Keyboard** | Audition with the mouse; can be hidden |
+| 5 | **Lower status bar** | Name and value of the control under the pointer, panic (all notes off), keyboard toggle |
+
+### Advanced workspace tabs
+
+| Tab | Contents |
+| --- | --- |
+| **Overview** | Clickable algorithm chart (click selects, right-click mutes), algorithm and feedback knobs, oscillator key sync, and six operator strips. Each strip has a power switch, activity meter, frequency readout, ratio/fixed switch, coarse/fine/detune, level, velocity, AM sensitivity, key rate scaling and a mini envelope |
+| **Envelopes** | OP 1–6 and PITCH selector; a large envelope with draggable points, eight rate/level knobs; keyboard scaling graph with break point, left/right curves and depths, rate scaling, output level and velocity |
+| **Modulation** | LFO waveform selector, live shape preview with delay ramp, speed/delay/pitch depth/amp depth/pitch sensitivity, key sync; mod wheel, foot, breath and aftertouch ranges with pitch/amp/EG-bias routing; pitch bend range and step; portamento and glissando; mono mode |
+| **Output** | Filter response curve with cutoff and resonance; output level and meter; master tune and transpose; engine resolution (Modern, Mark I, OPL series); mono mode and scale transposition |
 
 ## Design principles
 
-1. **Signal flow first.** Six numbered operator modules remain visible together. The FM algorithm diagram should be legible at a glance, with operator states and envelope behavior easy to inspect.
-2. **Tactility without visual noise.** A restrained graphite/navy chassis, warm labels, sea-glass parameter accents, and amber activity indicators create a recognizable instrument rather than a generic app form.
-3. **Read before adjusting.** Every critical parameter gets a descriptive label, a readable current state, an obvious hit area, and contrasting focus/hover/active states.
-4. **Preserve the real instrument.** Buttons and knobs must remain wired to existing JUCE parameters; a beautifully drawn non-functional control is a regression. The engine, patch format, MIDI behavior, 32 DX7 algorithms, and six-operator editing semantics are not redesigned here.
-5. **Fast for experienced players.** Retain shortcuts for operator focus/toggling, global settings, cartridge library and parameter dialog. Make program selection and keyboard performance immediately discoverable.
-6. **Window and host awareness.** Check zoom settings, compact/keyboard-hidden layout, high-DPI rendering, focus traversal, and DAW resizing. Do not rely on a single hard-coded desktop resolution in usability validation.
+1. **Two levels of depth.** The front panel covers playing and quick edits; the advanced workspace holds the full parameter set. Folding the workspace away leaves a compact classic instrument.
+2. **The hardware workflow still works.** Touch any control and the LCD shows its name and value; the data-entry fader and −1/+1 buttons then edit it, like the original's select-then-adjust model.
+3. **Signal flow first.** The algorithm chart is interactive and colour-codes each operator. The same colours run through the operator strips, envelope pages and keyboard-scaling graphs.
+4. **Read before adjusting.** Every knob caption turns into a live value readout while it is hovered or dragged, and the status bar repeats it.
+5. **Preserve the real instrument.** Every control is bound to an existing APVTS parameter: host automation, MIDI learn, presets and SysEx keep working. The engine, patch format, 32 algorithms and six-operator semantics are unchanged.
+6. **Window and host awareness.** Everything is vector-drawn and scales with the UI zoom setting. The window height follows the workspace and keyboard toggles, and both preferences persist.
 
 ## Visual system
 
-| Role | Color | Meaning |
+| Role | Colour | Use |
 | --- | --- | --- |
-| Primary chassis | `#101820` | Quiet background and depth |
-| Raised panels | `#17242D` | Operator and global grouping |
-| Primary text | `#E8E6DA` | Labels and readable parameter values |
-| Edit accent | `#55D7C7` | Active controls, parameter feedback and focus |
-| Signal / activity | `#F2B563` | Operator activity and warm status detail |
+| Chassis | `#342B26` → `#231D1A` | Front-panel surface with fine horizontal grain |
+| Panel print | `#EADFC6` / `#B6A68B` | Silk-screen style labels and rules |
+| Membrane switches | maroon `#93323D`, mint `#78BFA6`, cream `#DCCFB2`, violet `#74639A` | Mode, voice, data-entry and operator switches |
+| LCD | `#BCCD55` → `#98AF38`, ink `#1D2610` | Two-line, 20-column backlit display |
+| LED | `#FF4433` | Voice, algorithm and feedback numbers |
+| Workspace | `#1F2023`, cards `#2A2B2F`–`#313236` | Charcoal advanced area |
+| Accent | `#5AD4A6` | Selection, value arcs, open-workspace tab |
+| Operator colours | mint, sky, amber, lilac, rose, lime | OP 1 … OP 6 |
 
-Use subtle strokes and carefully controlled illumination for visual hierarchy. Do not use Arturia brand elements or their proprietary photographs. Prefer high-resolution JUCE vector drawing so details stay crisp at different zoom factors.
-
-## Interaction map
+## Interaction map and regression checks
 
 | Region | User task | Regression check |
 | --- | --- | --- |
-| Header / program area | Know the loaded instrument and current patch | Patch selection and program name stay synchronized with processor |
-| Six operator cards | Change FM ratio, output, keyboard scaling and envelope | All operator controls still write their native DX7 parameters and update on preset load |
-| Algorithm display | Understand the carrier/modulator routing | All 32 selections remain accessible; feedback is preserved |
-| Global / performance section | Adjust LFO, transpose, portamento and global parameters | Settings stay host-automatable and saved with program/host state where applicable |
-| Cartridge & settings | Import/export SysEx, manage programs and MIDI preferences | Existing cartridge dialogs, drag/drop and parameter dialog continue working |
-| Keyboard | Audition sounds directly | MIDI keyboard triggers notes and can be hidden without clipping other sections |
+| Toolbar / preset field | Know and change the current voice | Name, number and cartridge stay synchronised with the processor |
+| Voice-select switches | One-click voice recall | The lit switch and LED follow host program changes |
+| Data entry | Hardware-style editing | Fader and LCD follow the last-touched parameter and host automation |
+| Operator strips / Envelopes | Shape operators | Each control writes its native DX7 parameter and updates when a preset loads |
+| Algorithm chart | Understand and change routing | All 32 algorithms render; click selects, right-click toggles the operator switch |
+| Modulation / Output | Performance and engine setup | Controls stay host-automatable and match the settings dialog |
+| Cartridge library & settings | Import/export SysEx, MIDI preferences | Existing dialogs, drag-and-drop and file choosers keep working |
+| Keyboard | Audition | MIDI keyboard triggers notes and can be hidden without clipping |
 
 ## Completion checklist
 
-The following are **verification gates**, not claims that all are complete:
+These are **verification gates**, not claims that everything is complete:
 
-- [x] Linux native standalone compiles and launches using the redesigned JUCE editor — [final screenshot build/run 41267462749](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749) for source `28e6b2d`.
-- [x] Windows standalone and plug-in build job passes on GitHub Actions — [final multi-platform build run 41267462752](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752) for `28e6b2d`; **host runtime not independently tested**.
-- [x] macOS standalone and plug-in build job passes on GitHub Actions — [same final build run](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752); **host runtime and code-signing acceptance not independently tested**.
-- [x] An actual Linux standalone window was captured under Xvfb and committed to `docs/screenshots/dx7-main.png` by the UI screenshot workflow (1202 × 870; final capture run above, bot commit `bd8933d`).
-- [x] README embeds the verified main screenshot and links to the current build/release artifacts.
-- [x] The `UI-Nightly` rolling release was republished from the same source SHA `28e6b2d`, with five packages and a successful [final publish job](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462752).
-- [x] Operator and performance detail crops from the live Linux application are committed alongside the full screenshot ([final capture run 41267462749](https://github.com/boop-bip80/DX7-FM-synth/actions/runs/41267462749), [screenshot directory](https://github.com/boop-bip80/DX7-FM-synth/tree/master/docs/screenshots)).
-- [ ] All six operator panels and the algorithm diagram are legible at the default zoom level.
-- [ ] Program browsing, SysEx import/export, operator switches and keyboard shortcuts work manually.
-- [ ] Rendering is checked with keyboard shown and hidden, at available zoom settings.
-- [ ] Plugin controls remain linked to DSP and persist correctly in a DAW session.
-- [ ] Focus, keyboard operation, contrast and target sizes receive a manual accessibility review.
+- [x] The redesigned editor compiles and launches as a Linux standalone, and real Xvfb screenshots of all four tabs and the folded classic view are captured by `.github/workflows/capture-ui.sh`, which clicks the real tabs.
+- [x] Scripted Xvfb interaction check: voice select, data entry +1, an envelope point drag, algorithm-chart operator mute, the cartridge library and the settings dialog all respond as intended.
+- [ ] Windows, macOS and Linux plug-in builds pass on GitHub Actions for the commit being inspected (see the README for the current run).
+- [ ] Program browsing, SysEx import/export and keyboard shortcuts are checked manually in a DAW.
+- [ ] Rendering is checked at every UI zoom setting, with the keyboard and workspace both shown and hidden.
+- [ ] Plug-in controls remain linked to DSP and persist correctly in a DAW session.
+- [ ] Focus order, keyboard operation, contrast and target sizes receive a manual accessibility review.
 
-The workflows provide compile/build and screenshot evidence; they do not by themselves prove audio fidelity, accessibility, or DAW integration. Those require explicit manual or automated functional tests.
+The workflows provide compile, build and screenshot evidence. They do not prove audio fidelity, accessibility or DAW integration on their own; those need explicit manual or automated functional tests.

@@ -129,33 +129,187 @@ static double getDuration(int p_rate, int p_level_l, int p_level_r) {
     return duration;
 }
 
+//==============================================================================
+juce::Rectangle<float> EnvelopeViewBase::graphArea() const {
+    auto frame = getLocalBounds().toFloat().reduced(0.5f);
+    if (showLabels)
+        return frame.reduced(14.0f, 12.0f).withTrimmedLeft(10.0f);
+    return frame.reduced(5.0f, 4.0f);
+}
+
+float EnvelopeViewBase::levelToY(juce::Rectangle<float> graph, int level) const {
+    return graph.getBottom() - graph.getHeight() * jlimit(0, 99, level) / 99.0f;
+}
+
+void EnvelopeViewBase::setParam(juce::RangedAudioParameter* p, int value) {
+    if (p == nullptr)
+        return;
+    const auto range = p->getNormalisableRange();
+    p->setValueNotifyingHost(p->convertTo0to1(jlimit(range.start, range.end, (float) value)));
+}
+
+int EnvelopeViewBase::getParam(juce::RangedAudioParameter* p) {
+    return p == nullptr ? 0 : roundToInt(p->convertFrom0to1(p->getValue()));
+}
+
+int EnvelopeViewBase::findPoint(juce::Point<float> p) const {
+    int best = -1;
+    float bestDistance = 11.0f;
+    for (int i = 0; i < points.size(); ++i) {
+        if (pointStage[i] < 0)
+            continue;
+        const float d = points[i].getDistanceFrom(p);
+        if (d < bestDistance) {
+            bestDistance = d;
+            best = i;
+        }
+    }
+    return best;
+}
+
+void EnvelopeViewBase::mouseMove(const juce::MouseEvent& e) {
+    if (!editable)
+        return;
+    const int p = findPoint(e.position);
+    if (p != hoverPoint) {
+        hoverPoint = p;
+        repaint();
+    }
+}
+
+void EnvelopeViewBase::mouseExit(const juce::MouseEvent&) {
+    if (hoverPoint != -1) {
+        hoverPoint = -1;
+        repaint();
+    }
+}
+
+void EnvelopeViewBase::mouseDown(const juce::MouseEvent& e) {
+    if (!editable || e.mods.isPopupMenu())
+        return;
+    dragPoint = findPoint(e.position);
+    if (dragPoint < 0)
+        return;
+    const int stage = pointStage[dragPoint];
+    dragStartRate = getParam(rateParams[stage]);
+    dragStartLevel = getParam(levelParams[stage]);
+    if (rateParams[stage] != nullptr) rateParams[stage]->beginChangeGesture();
+    if (levelParams[stage] != nullptr) levelParams[stage]->beginChangeGesture();
+}
+
+void EnvelopeViewBase::mouseDrag(const juce::MouseEvent& e) {
+    if (dragPoint < 0)
+        return;
+    const int stage = pointStage[dragPoint];
+    const auto graph = graphArea();
+    const float levelDelta = -e.getDistanceFromDragStartY() * 99.0f / jmax(1.0f, graph.getHeight());
+    const float rateDelta = -e.getDistanceFromDragStartX() * 99.0f / jmax(1.0f, graph.getWidth() * 0.8f);
+    setParam(levelParams[stage], roundToInt(dragStartLevel + levelDelta));
+    if (!e.mods.isShiftDown()) // Shift locks the rate so only the level moves.
+        setParam(rateParams[stage], roundToInt(dragStartRate + rateDelta));
+}
+
+void EnvelopeViewBase::mouseUp(const juce::MouseEvent&) {
+    if (dragPoint < 0)
+        return;
+    const int stage = pointStage[dragPoint];
+    if (rateParams[stage] != nullptr) rateParams[stage]->endChangeGesture();
+    if (levelParams[stage] != nullptr) levelParams[stage]->endChangeGesture();
+    dragPoint = -1;
+}
+
+void EnvelopeViewBase::drawFrame(juce::Graphics& g, juce::Rectangle<float> graph) {
+    const auto frame = getLocalBounds().toFloat().reduced(0.5f);
+    g.setColour(Colour(0xff141517));
+    g.fillRoundedRectangle(frame, 4.0f);
+    g.setColour(Colour(0xff3c3d42));
+    g.drawRoundedRectangle(frame, 4.0f, 1.0f);
+
+    const int divisions = showLabels ? 8 : 4;
+    for (int tick = 1; tick < divisions; ++tick) {
+        const float x = graph.getX() + graph.getWidth() * tick / (float) divisions;
+        g.setColour(Colours::white.withAlpha(0.05f));
+        g.drawLine(x, graph.getY(), x, graph.getBottom(), 0.7f);
+    }
+    for (int tick = 0; tick <= 4; ++tick) {
+        const float y = graph.getY() + graph.getHeight() * tick / 4.0f;
+        g.setColour(Colours::white.withAlpha(tick == 4 ? 0.12f : 0.05f));
+        g.drawLine(graph.getX(), y, graph.getRight(), y, 0.7f);
+        if (showLabels) {
+            g.setColour(Colour(0xff66666a));
+            g.setFont(juce::Font(juce::FontOptions().withHeight(8.5f)));
+            g.drawText(String(roundToInt(99.0f * (1.0f - tick / 4.0f))),
+                       Rectangle<float>(graph.getX() - 24.0f, y - 6.0f, 20.0f, 12.0f).toNearestInt(),
+                       Justification::centredRight, false);
+        }
+    }
+}
+
+void EnvelopeViewBase::drawCurve(juce::Graphics& g, juce::Rectangle<float> graph, int activeIndex) {
+    if (points.size() < 2)
+        return;
+    Path envelope;
+    envelope.startNewSubPath(points[0]);
+    for (int i = 1; i < points.size(); ++i)
+        envelope.lineTo(points[i]);
+
+    Path fill(envelope);
+    fill.lineTo(points.getLast().x, graph.getBottom());
+    fill.lineTo(points[0].x, graph.getBottom());
+    fill.closeSubPath();
+    g.setGradientFill(ColourGradient(accent.withAlpha(0.45f), graph.getCentreX(), graph.getY(),
+                                     accent.withAlpha(0.04f), graph.getCentreX(), graph.getBottom(), false));
+    g.fillPath(fill);
+    g.setColour(accent);
+    g.strokePath(envelope, PathStrokeType(showLabels ? 2.2f : 1.6f, PathStrokeType::curved, PathStrokeType::rounded));
+
+    for (int i = 0; i < points.size(); ++i) {
+        const bool draggable = editable && pointStage[i] >= 0;
+        const bool active = i == activeIndex;
+        if (!draggable && !active)
+            continue;
+        float radius = showLabels ? 4.5f : 2.4f;
+        if (i == hoverPoint || i == dragPoint)
+            radius += 1.5f;
+        if (active) {
+            g.setColour(Colour(0xfff0b35e));
+            g.fillEllipse(points[i].x - radius, points[i].y - radius, radius * 2.0f, radius * 2.0f);
+        } else {
+            g.setColour(Colour(0xff141517));
+            g.fillEllipse(points[i].x - radius, points[i].y - radius, radius * 2.0f, radius * 2.0f);
+            g.setColour(i == hoverPoint || i == dragPoint ? Colours::white : accent);
+            g.drawEllipse(points[i].x - radius, points[i].y - radius, radius * 2.0f, radius * 2.0f, 1.6f);
+            if (showLabels) {
+                g.setFont(juce::Font(juce::FontOptions().withHeight(9.0f).withStyle("Bold")));
+                g.setColour(Colour(0xff9a9995));
+                const float labelY = points[i].y - radius - 14.0f < graph.getY() - 10.0f
+                                         ? points[i].y + radius + 2.0f : points[i].y - radius - 14.0f;
+                g.drawText(String(pointStage[i] + 1),
+                           Rectangle<float>(points[i].x - 10.0f, labelY, 20.0f, 12.0f).toNearestInt(),
+                           Justification::centred, false);
+            }
+        }
+    }
+}
+
+//==============================================================================
 EnvDisplay::EnvDisplay(DexedApvts &apvts, int op) {
     for (int i=0; i<4; i++) {
         rates[i].referTo(apvts, IDs::egRate.op(op).idx(i).name);
         levels[i].referTo(apvts, IDs::egLevel.op(op).idx(i).name);
         rates[i].callback = [this] { repaint(); };
         levels[i].callback = [this] { repaint(); };
+        rateParams[i] = apvts.getParameter(IDs::egRate.op(op).idx(i).name);
+        levelParams[i] = apvts.getParameter(IDs::egLevel.op(op).idx(i).name);
     }
+    setTitle("Operator " + String(op + 1) + " amplitude envelope");
 }
 
 void EnvDisplay::paint(Graphics &g) {
-    const auto frame = getLocalBounds().toFloat().reduced(0.5f);
-    if (frame.getWidth() < 12.0f || frame.getHeight() < 12.0f)
+    const auto graph = graphArea();
+    if (graph.getWidth() < 12.0f || graph.getHeight() < 8.0f)
         return;
-
-    g.setColour(Colour(0xff0e1b22));
-    g.fillRoundedRectangle(frame, 4.0f);
-    g.setColour(Colour(0xff3c5360));
-    g.drawRoundedRectangle(frame, 4.0f, 0.8f);
-
-    const auto graph = frame.reduced(4.0f, 3.0f);
-    for (int tick = 1; tick < 4; ++tick) {
-        const float x = graph.getX() + graph.getWidth() * tick * 0.25f;
-        g.setColour(Colour(0xff38505c).withAlpha(0.46f));
-        g.drawLine(x, graph.getY(), x, graph.getBottom(), 0.65f);
-    }
-    g.setColour(Colour(0xff3e5661).withAlpha(0.58f));
-    g.drawLine(graph.getX(), graph.getCentreY(), graph.getRight(), graph.getCentreY(), 0.7f);
+    drawFrame(g, graph);
 
     double durations[4] = {
         getDuration(rates[0], levels[3], levels[0]),
@@ -170,45 +324,31 @@ void EnvDisplay::paint(Graphics &g) {
     const double holdTime = jmax(0.12, sustainTime * 0.16);
     const double totalTime = sustainTime + holdTime + durations[3];
     const double pixelsPerSecond = graph.getWidth() / totalTime;
-    const auto y = [&graph](int level) {
-        return graph.getBottom() - graph.getHeight() * jlimit(0, 99, level) / 99.0f;
-    };
+    auto y = [this, &graph](int level) { return levelToY(graph, level); };
 
-    Point<float> points[6] = {
-        {graph.getX(), y(levels[3])},
-        {graph.getX() + (float)(durations[0] * pixelsPerSecond), y(levels[0])},
-        {graph.getX() + (float)((durations[0] + durations[1]) * pixelsPerSecond), y(levels[1])},
-        {graph.getX() + (float)(sustainTime * pixelsPerSecond), y(levels[2])},
-        {graph.getX() + (float)((sustainTime + holdTime) * pixelsPerSecond), y(levels[2])},
-        {graph.getRight(), y(levels[3])}
-    };
+    points.clearQuick();
+    pointStage.clearQuick();
+    points.add({graph.getX(), y(levels[3])});                                                              pointStage.add(-1);
+    points.add({graph.getX() + (float)(durations[0] * pixelsPerSecond), y(levels[0])});                   pointStage.add(0);
+    points.add({graph.getX() + (float)((durations[0] + durations[1]) * pixelsPerSecond), y(levels[1])});  pointStage.add(1);
+    points.add({graph.getX() + (float)(sustainTime * pixelsPerSecond), y(levels[2])});                    pointStage.add(2);
+    points.add({graph.getX() + (float)((sustainTime + holdTime) * pixelsPerSecond), y(levels[2])});       pointStage.add(-1);
+    points.add({graph.getRight(), y(levels[3])});                                                          pointStage.add(3);
 
-    g.setColour(Colour(0xfff2b563).withAlpha(0.30f));
-    g.drawLine(points[4].x, graph.getY(), points[4].x, graph.getBottom(), 1.0f);
-
-    Path envelope;
-    envelope.startNewSubPath(points[0]);
-    for (int i = 1; i < 6; ++i)
-        envelope.lineTo(points[i]);
-
-    Path fill(envelope);
-    fill.lineTo(graph.getRight(), graph.getBottom());
-    fill.lineTo(graph.getX(), graph.getBottom());
-    fill.closeSubPath();
-    g.setGradientFill(ColourGradient(Colour(0x8555d7c7), graph.getCentreX(), graph.getY(),
-                                      Colour(0x1155d7c7), graph.getCentreX(), graph.getBottom(), false));
-    g.fillPath(fill);
-    g.setColour(Colour(0xff6ee7d8));
-    g.strokePath(envelope, PathStrokeType(1.75f, PathStrokeType::curved, PathStrokeType::rounded));
-
-    const auto active = jlimit(0, 5, static_cast<int>(vPos));
-    for (int i = 0; i < 6; ++i) {
-        if (i != active && i != active + 1)
-            continue;
-        g.setColour(i == active ? Colour(0xfff2b563) : Colour(0xffe8e6da));
-        const float radius = i == active ? 2.6f : 1.6f;
-        g.fillEllipse(points[i].x - radius, points[i].y - radius, radius * 2.0f, radius * 2.0f);
+    // Key-off marker at the end of the sustain hold.
+    g.setColour(Colour(0xfff0b35e).withAlpha(0.35f));
+    const float dash[] = { 3.0f, 3.0f };
+    g.drawDashedLine(Line<float>(points[4].x, graph.getY(), points[4].x, graph.getBottom()), dash, 2, 1.0f);
+    if (showLabels) {
+        g.setFont(juce::Font(juce::FontOptions().withHeight(8.5f).withStyle("Bold")));
+        const bool roomRight = points[4].x + 54.0f < graph.getRight();
+        g.drawText("KEY OFF", Rectangle<float>(roomRight ? points[4].x + 4.0f : points[4].x - 54.0f,
+                                               graph.getY(), 50.0f, 12.0f).toNearestInt(),
+                   roomRight ? Justification::centredLeft : Justification::centredRight, false);
     }
+
+    const int active = jlimit(0, 5, static_cast<int>(vPos));
+    drawCurve(g, graph, vPos > 0 ? active : -1);
 }
 
 PitchEnvDisplay::PitchEnvDisplay(DexedApvts &apvts) {
@@ -217,26 +357,25 @@ PitchEnvDisplay::PitchEnvDisplay(DexedApvts &apvts) {
         levels[i].referTo(apvts, IDs::pitchEgLevel.idx(i).name);
         rates[i].callback = [this] { repaint(); };
         levels[i].callback = [this] { repaint(); };
+        rateParams[i] = apvts.getParameter(IDs::pitchEgRate.idx(i).name);
+        levelParams[i] = apvts.getParameter(IDs::pitchEgLevel.idx(i).name);
     }
+    accent = Colour(0xfff0b35e);
+    setTitle("Pitch envelope");
+}
+
+float PitchEnvDisplay::levelToY(juce::Rectangle<float> graph, int level) const {
+    const float normalised = (pitchenv_tab[jlimit(0, 99, level)] + 128) / 255.0f;
+    return graph.getBottom() - graph.getHeight() * normalised;
 }
 
 void PitchEnvDisplay::paint(Graphics &g) {
-    const auto frame = getLocalBounds().toFloat().reduced(0.5f);
-    if (frame.getWidth() < 12.0f || frame.getHeight() < 12.0f)
+    const auto graph = graphArea();
+    if (graph.getWidth() < 12.0f || graph.getHeight() < 8.0f)
         return;
-
-    g.setColour(Colour(0xff0e1b22));
-    g.fillRoundedRectangle(frame, 4.0f);
-    g.setColour(Colour(0xff3c5360));
-    g.drawRoundedRectangle(frame, 4.0f, 0.8f);
-
-    const auto graph = frame.reduced(4.0f, 3.0f);
-    g.setColour(Colour(0xff425a66).withAlpha(0.53f));
-    g.drawLine(graph.getX(), graph.getCentreY(), graph.getRight(), graph.getCentreY(), 0.8f);
-    for (int tick = 1; tick < 4; ++tick) {
-        const float x = graph.getX() + graph.getWidth() * tick * 0.25f;
-        g.drawLine(x, graph.getY(), x, graph.getBottom(), 0.65f);
-    }
+    drawFrame(g, graph);
+    g.setColour(Colours::white.withAlpha(0.14f));
+    g.drawLine(graph.getX(), levelToY(graph, 50), graph.getRight(), levelToY(graph, 50), 0.9f);
 
     float dist[4], total = 0.0f;
     int previous = pitchenv_tab[jlimit(0, 99, static_cast<int>(levels[3]))] + 128;
@@ -247,39 +386,26 @@ void PitchEnvDisplay::paint(Graphics &g) {
         total += dist[i];
         previous = current;
     }
-    if (total < 0.00001f) {
-        for (auto& duration : dist)
-            duration = 1.0f;
-        total = 4.0f;
+    // Keep every segment visible even when its level does not change.
+    const float minimum = jmax(total, 0.0001f) * 0.06f;
+    total = 0.0f;
+    for (auto& d : dist) {
+        d = jmax(d, minimum);
+        total += d;
     }
 
     const float stepScale = graph.getWidth() / total;
-    const auto y = [&graph](int level) {
-        const float normalised = (pitchenv_tab[jlimit(0, 99, level)] + 128) / 255.0f;
-        return graph.getBottom() - graph.getHeight() * normalised;
-    };
-    Point<float> points[5] = {{graph.getX(), y(levels[3])}};
+    points.clearQuick();
+    pointStage.clearQuick();
+    points.add({graph.getX(), levelToY(graph, levels[3])});
+    pointStage.add(-1);
     float x = graph.getX();
     for (int i = 0; i < 4; ++i) {
         x += dist[i] * stepScale;
-        points[i + 1] = {x, y(levels[i])};
+        points.add({x, levelToY(graph, levels[i])});
+        pointStage.add(i);
     }
 
-    Path envelope;
-    envelope.startNewSubPath(points[0]);
-    for (int i = 1; i < 5; ++i)
-        envelope.lineTo(points[i]);
-    Path fill(envelope);
-    fill.lineTo(graph.getRight(), graph.getBottom());
-    fill.lineTo(graph.getX(), graph.getBottom());
-    fill.closeSubPath();
-    g.setGradientFill(ColourGradient(Colour(0x8855d7c7), graph.getCentreX(), graph.getY(),
-                                      Colour(0x1155d7c7), graph.getCentreX(), graph.getBottom(), false));
-    g.fillPath(fill);
-    g.setColour(Colour(0xff6ee7d8));
-    g.strokePath(envelope, PathStrokeType(1.75f, PathStrokeType::curved, PathStrokeType::rounded));
-
     const int active = jlimit(0, 4, static_cast<int>(vPos));
-    g.setColour(Colour(0xfff2b563));
-    g.fillEllipse(points[active].x - 2.6f, points[active].y - 2.6f, 5.2f, 5.2f);
+    drawCurve(g, graph, vPos > 0 ? active : -1);
 }

@@ -1,6 +1,7 @@
 /**
  *
  * Copyright (c) 2013-2018 Pascal Gauthier.
+ * Copyright (c) 2026 DX7 FM Synth contributors.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,9 +21,12 @@
 
 #include "PluginEditor.h"
 #include "window/ParamDialog.h"
+#include "window/AboutBox.h"
 #include "midi/SysexComm.h"
 #include "window/TuningShow.h"
+#include "parameter/Model.h"
 #include "../debugger/Logger.h"
+#include "../debugger/ValueTreeDebugger.h"
 #include "math.h"
 #include <fstream>
 #include <memory>
@@ -30,106 +34,131 @@
 #include "../msfa/fm_op_kernel.h"
 
 //==============================================================================
+void PresetNameField::paint(Graphics& g) {
+    auto r = getLocalBounds().toFloat().reduced(0.5f);
+    const bool over = isMouseOver(true);
+    g.setColour(vt::toolbarField);
+    g.fillRoundedRectangle(r, 4.0f);
+    g.setColour(over ? vt::accent.withAlpha(0.7f) : vt::toolbarLine);
+    g.drawRoundedRectangle(r, 4.0f, 1.0f);
+    auto textArea = r.reduced(12.0f, 0.0f);
+    vt::text(g, name, textArea.withTrimmedRight(150.0f), vt::toolbarText, 14.0f, true, Justification::centredLeft);
+    vt::text(g, info, textArea.withTrimmedRight(16.0f).withTrimmedLeft(textArea.getWidth() - 160.0f),
+             vt::toolbarDim, 10.0f, true, Justification::centredRight);
+    Path arrow;
+    const float ax = r.getRight() - 12.0f, ay = r.getCentreY();
+    arrow.addTriangle(ax - 4.0f, ay - 2.0f, ax + 4.0f, ay - 2.0f, ax, ay + 3.0f);
+    g.setColour(vt::toolbarDim);
+    g.fillPath(arrow);
+}
+
+void PresetNameField::mouseWheelMove(const MouseEvent&, const MouseWheelDetails& wheel) {
+    wheelAccumulator += wheel.deltaY;
+    if (std::abs(wheelAccumulator) > 0.2f) {
+        if (onWheel) onWheel(wheelAccumulator > 0.0f ? -1 : 1);
+        wheelAccumulator = 0.0f;
+    }
+}
+
+void DexedAudioProcessorEditor::TouchTracker::mouseDown(const MouseEvent& event) {
+    // Walk up from the clicked component to the nearest parameter-bound one.
+    for (auto* c = event.eventComponent; c != nullptr && c != &editor; c = c->getParentComponent()) {
+        if (auto* param = editor.processor->parameters.getParameter(c->getName())) {
+            editor.setDataParameter(param);
+            return;
+        }
+    }
+}
+
+//==============================================================================
 DexedAudioProcessorEditor::DexedAudioProcessorEditor (DexedAudioProcessor* ownerFilter)
     : AudioProcessorEditor (ownerFilter),
+      hardware(*ownerFilter),
+      advanced(*ownerFilter),
       midiKeyboard (ownerFilter->keyboardState, MidiKeyboardComponent::horizontalKeyboard),
-      cartManager(this), global(*ownerFilter, this) {
+      cartManager(this) {
     processor = ownerFilter;
+    lookAndFeel->setDefaultLookAndFeel(lookAndFeel);
 
-    // Set the host window size before attaching the keyboard so that hosts
+    // Set the host window size before attaching children so that hosts
     // which query it during construction see the correct dimensions.
     resetSize();
     setExplicitFocusOrder(1);
-
-    frameComponent.setBounds(0, 0, WINDOW_SIZE_X,
-                             processor->showKeyboard ? WINDOW_SIZE_Y : WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT);
     addAndMakeVisible(&frameComponent);
-    lookAndFeel->setDefaultLookAndFeel(lookAndFeel);
-    background = lookAndFeel->background;
 
-    // A readable, musical command bar: everything here delegates to the
-    // existing program, cartridge and settings operations.
-    voiceNameLabel.setName("Current FM voice");
-    voiceNameLabel.setTitle("Current FM voice");
-    voiceNameLabel.setJustificationType(Justification::centredLeft);
-    voiceNameLabel.setFont(Font(23.0f, Font::bold));
-    voiceNameLabel.setColour(Label::textColourId, Colour(0xffe8e6da));
-    voiceNameLabel.setBounds(300, 18, 275, 30);
-    frameComponent.addAndMakeVisible(voiceNameLabel);
+    // ---- Upper toolbar ----------------------------------------------------
+    menuButton.setTooltip("Main menu: voice, cartridge, settings and view options");
+    menuButton.onClick = [this] { showMainMenu(); };
+    libraryButton.setTooltip("Cartridge library: browse and load DX7 SysEx banks (Ctrl+L)");
+    libraryButton.onClick = [this] { cartShow(); };
+    previousVoiceButton.setTooltip("Previous voice");
+    previousVoiceButton.onClick = [this] { moveToProgram(-1); };
+    nextVoiceButton.setTooltip("Next voice");
+    nextVoiceButton.onClick = [this] { moveToProgram(1); };
+    saveVoiceButton.setTooltip("Store this voice in the cartridge or a .syx file");
+    saveVoiceButton.onClick = [this] { storeProgram(); };
+    settingsButton.setTooltip("Settings: MIDI, controllers, tuning and UI scaling (Ctrl+P)");
+    settingsButton.onClick = [this] { parmShow(); };
+    presetField.setTooltip("Click to choose a voice of the loaded cartridge; scroll to step through voices");
+    presetField.onClick = [this] { showProgramMenu(); };
+    presetField.onWheel = [this](int direction) { moveToProgram(direction); };
+    for (auto* c : std::initializer_list<Component*> { &menuButton, &libraryButton, &presetField, &previousVoiceButton,
+                                                       &nextVoiceButton, &saveVoiceButton, &settingsButton })
+        frameComponent.addAndMakeVisible(c);
 
-    voiceNumberLabel.setName("Voice position and synthesis type");
-    voiceNumberLabel.setJustificationType(Justification::centredLeft);
-    voiceNumberLabel.setFont(Font(11.0f, Font::plain));
-    voiceNumberLabel.setColour(Label::textColourId, Colour(0xff8ba6ae));
-    voiceNumberLabel.setBounds(301, 50, 275, 19);
-    frameComponent.addAndMakeVisible(voiceNumberLabel);
-
-    auto styleToolbarButton = [this](TextButton& button, int x, int width, const String& help,
-                                     bool emphasized = false) {
-        button.setBounds(x, 21, width, 42);
-        button.setTooltip(help);
-        button.setColour(TextButton::buttonColourId,
-                         emphasized ? Colour(0xff22776f) : Colour(0xff273943));
-        button.setColour(TextButton::buttonOnColourId, Colour(0xff22776f));
-        button.setColour(TextButton::textColourOffId, Colour(0xffe8e6da));
-        button.setColour(TextButton::textColourOnId, Colour(0xffe8e6da));
-        frameComponent.addAndMakeVisible(button);
+    // ---- Front panel ------------------------------------------------------
+    hardware.onVoiceSelected = [this](int index) { selectProgram(index); };
+    hardware.onLibrary = [this] { cartShow(); };
+    hardware.onStore = [this] { storeProgram(); };
+    hardware.onInit = [this] { initProgram(); };
+    hardware.onFunction = [this] { parmShow(); };
+    hardware.onAdvancedToggled = [this](bool open) { setAdvancedOpen(open); };
+    hardware.onDataStep = [this](int delta) { stepDataParameter(delta); };
+    auto& dataSlider = hardware.getDataEntrySlider();
+    dataSlider.onDragStart = [this] { if (dataParameter != nullptr) dataParameter->beginChangeGesture(); };
+    dataSlider.onDragEnd = [this] { if (dataParameter != nullptr) dataParameter->endChangeGesture(); };
+    dataSlider.onValueChange = [this, &dataSlider] {
+        if (dataParameter != nullptr)
+            dataParameter->setValueNotifyingHost((float) dataSlider.getValue());
     };
+    hardware.setAdvancedOpen(processor->showAdvanced);
+    frameComponent.addAndMakeVisible(hardware);
 
-    styleToolbarButton(previousVoiceButton, 592, 65, "Previous voice in the loaded cartridge");
-    styleToolbarButton(nextVoiceButton, 663, 65, "Next voice in the loaded cartridge");
-    styleToolbarButton(libraryButton, 741, 106, "Browse and import DX7 SysEx cartridges");
-    styleToolbarButton(saveVoiceButton, 855, 100, "Save this voice or cartridge", true);
-    styleToolbarButton(settingsButton, 963, 100, "MIDI, tuning, audio and UI preferences");
-    styleToolbarButton(keyboardButton, 1071, 112, "Show or hide the on-screen piano keyboard");
+    // ---- Advanced workspace ----------------------------------------------
+    frameComponent.addChildComponent(advanced);
 
-    previousVoiceButton.onClick = [this]() { moveToProgram(-1); };
-    nextVoiceButton.onClick = [this]() { moveToProgram(1); };
-    libraryButton.onClick = [this]() { cartShow(); };
-    saveVoiceButton.onClick = [this]() { storeProgram(); };
-    settingsButton.onClick = [this]() { parmShow(); };
-    keyboardButton.setClickingTogglesState(true);
-    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
-    keyboardButton.onClick = [this]() {
-        processor->showKeyboard = keyboardButton.getToggleState();
-        processor->savePreference();
-        resetSize();
-    };
-
-    // The six operators form two uniform rows. Their editors own all sound
-    // controls, so no audio parameter bindings are moved or duplicated.
-    for (int i = 0; i < 6; ++i) {
-        operators[i] = std::make_unique<OperatorEditor>(*processor, i);
-        frameComponent.addAndMakeVisible(operators[i].get());
-    }
-    constexpr int operatorColumns[] = { 16, 409, 802 };
-    for (int i = 0; i < 6; ++i)
-        operators[i]->setBounds(operatorColumns[i % 3], i < 3 ? 110 : 344, 381, 226);
-
-    // Retain the original fully playable MIDI keyboard.
-    frameComponent.addAndMakeVisible (&midiKeyboard);
+    // ---- Keyboard -----------------------------------------------------------
+    frameComponent.addAndMakeVisible(&midiKeyboard);
     midiKeyboard.setLowestVisibleKey(24);
-    midiKeyboard.setBounds(18, 766, WINDOW_SIZE_X - 36, 69);
     midiKeyboard.setTitle("Keyboard keys");
-    midiKeyboard.setColour(MidiKeyboardComponent::whiteNoteColourId, Colour(0xffe8e6da));
-    midiKeyboard.setColour(MidiKeyboardComponent::blackNoteColourId, Colour(0xff17242d));
-    midiKeyboard.setColour(MidiKeyboardComponent::keySeparatorLineColourId, Colour(0xff576b72));
-    midiKeyboard.setColour(MidiKeyboardComponent::keyDownOverlayColourId, Colour(0xff55d7c7));
+    midiKeyboard.setColour(MidiKeyboardComponent::whiteNoteColourId, Colour(0xffefede6));
+    midiKeyboard.setColour(MidiKeyboardComponent::blackNoteColourId, Colour(0xff17181a));
+    midiKeyboard.setColour(MidiKeyboardComponent::keySeparatorLineColourId, Colour(0xff8a8884));
+    midiKeyboard.setColour(MidiKeyboardComponent::keyDownOverlayColourId, vt::accent.withAlpha(0.85f));
+    midiKeyboard.setColour(MidiKeyboardComponent::mouseOverKeyOverlayColourId, vt::accent.withAlpha(0.25f));
+    midiKeyboard.setColour(MidiKeyboardComponent::shadowColourId, Colours::black.withAlpha(0.35f));
+    midiKeyboard.setColour(MidiKeyboardComponent::textLabelColourId, Colour(0xff55565b));
 
-    // Engine-wide algorithm, LFO, tuning and performance controls.
-    frameComponent.addAndMakeVisible(&global);
-    global.setBounds(18, 594, WINDOW_SIZE_X - 36, 160);
-    global.cartButton->onClick = [this]() { cartShow(); };
-    global.parmButton->onClick = [this]() { parmShow(); };
-    global.initButton->onClick = [this]() { initProgram(); };
-    global.storeButton->onClick = [this]() { storeProgram(); };
-
-    rebuildProgramCombobox();
-    global.programs->addListener(this);
+    // ---- Lower status bar ---------------------------------------------------
+    statusReadout = std::make_unique<ParameterObserver>(&frameComponent, processor->parameters);
+    frameComponent.addAndMakeVisible(statusReadout.get());
+    panicButton.setTooltip("Panic: release all sounding notes");
+    panicButton.onClick = [this] {
+        processor->command.push([](DexedAudioProcessor& proc) { proc.panic(); });
+    };
+    keyboardButton.setClickingTogglesState(true);
+    keyboardButton.setTooltip("Show or hide the on-screen keyboard");
+    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
+    keyboardButton.onClick = [this] { setKeyboardVisible(keyboardButton.getToggleState()); };
+    frameComponent.addAndMakeVisible(panicButton);
+    frameComponent.addAndMakeVisible(keyboardButton);
 
     frameComponent.addChildComponent(&cartManagerCover);
     cartManagerCover.addChildComponent(&cartManager);
     cartManager.setVisible(true);
+
+    frameComponent.addMouseListener(&touchTracker, true);
+    setDataParameter(processor->parameters.getParameter(IDs::algorithm.name));
 
     AffineTransform scale = AffineTransform::scale(processor->getZoomFactor());
     frameComponent.setTransform(scale);
@@ -141,80 +170,166 @@ DexedAudioProcessorEditor::DexedAudioProcessorEditor (DexedAudioProcessor* owner
 
 DexedAudioProcessorEditor::~DexedAudioProcessorEditor() {
     stopTimer();
+    frameComponent.removeMouseListener(&touchTracker);
+    statusReadout = nullptr;
     setLookAndFeel(nullptr);
 }
 
 //==============================================================================
-void DexedAudioProcessorEditor::paint (Graphics& g) {
-    // Draw at logical coordinates, then apply the same user-selected scale as
-    // the child frame. Every vector border remains sharp on HiDPI hosts.
-    g.fillAll(Colour(0xff101820));
-    g.addTransform(AffineTransform::scale(static_cast<float>(getWidth()) / WINDOW_SIZE_X));
+int DexedAudioProcessorEditor::logicalHeight() const {
+    int h = TOOLBAR_HEIGHT + HardwarePanel::panelHeight + STATUS_BAR_HEIGHT;
+    if (processor->showAdvanced)
+        h += AdvancedPanel::panelHeight;
+    if (processor->showKeyboard)
+        h += KEYBOARD_AREA_HEIGHT;
+    return h;
+}
 
-    ColourGradient backdrop(Colour(0xff15232e), 600.0f, 0.0f,
-                            Colour(0xff0d151c), 600.0f, WINDOW_SIZE_Y, false);
-    g.setGradientFill(backdrop);
-    g.fillRect(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y);
+void DexedAudioProcessorEditor::layoutFrame() {
+    const int w = WINDOW_SIZE_X;
+    const int h = logicalHeight();
+    frameComponent.setBounds(0, 0, w, h);
 
-    g.setColour(Colour(0xff1a2b35));
-    g.fillRoundedRectangle(12.0f, 11.0f, 1176.0f, 67.0f, 11.0f);
-    g.setColour(Colour(0xff345360));
-    g.drawRoundedRectangle(12.5f, 11.5f, 1175.0f, 66.0f, 10.0f, 1.0f);
+    menuButton.setBounds(8, 6, 112, 32);
+    libraryButton.setBounds(126, 6, 36, 32);
+    presetField.setBounds(366, 6, 404, 32);
+    previousVoiceButton.setBounds(776, 6, 32, 32);
+    nextVoiceButton.setBounds(810, 6, 32, 32);
+    saveVoiceButton.setBounds(852, 6, 36, 32);
+    settingsButton.setBounds(w - 46, 6, 38, 32);
 
-    // An original product mark, intentionally not a recreation of another
-    // manufacturer's artwork or logo.
-    g.setColour(Colour(0xff55d7c7));
-    g.fillRoundedRectangle(25.0f, 22.0f, 4.0f, 43.0f, 2.0f);
-    g.setColour(Colour(0xffe8e6da));
-    g.setFont(Font(28.0f, Font::bold));
-    g.drawText("DX7", 40, 17, 93, 36, Justification::centredLeft);
-    g.setColour(Colour(0xff55d7c7));
-    g.setFont(Font(15.0f, Font::bold));
-    g.drawText("/ FM", 127, 24, 77, 23, Justification::centredLeft);
-    g.setColour(Colour(0xff8ba6ae));
-    g.setFont(Font(10.0f, Font::plain));
-    g.drawText("SIX-OPERATOR SYNTHESIZER", 40, 49, 230, 17, Justification::centredLeft);
+    int y = TOOLBAR_HEIGHT;
+    hardware.setBounds(0, y, w, HardwarePanel::panelHeight);
+    y += HardwarePanel::panelHeight;
 
-    g.setColour(Colour(0xff243842));
-    g.fillRoundedRectangle(286.0f, 17.0f, 293.0f, 55.0f, 7.0f);
-    g.setColour(Colour(0xff36515b));
-    g.drawRoundedRectangle(286.5f, 17.5f, 292.0f, 54.0f, 7.0f, 1.0f);
-
-    auto sectionHeader = [&g](const String& name, const String& helper, float top) {
-        g.setColour(Colour(0xff55d7c7));
-        g.fillRoundedRectangle(18.0f, top + 4.0f, 4.0f, 10.0f, 2.0f);
-        g.setColour(Colour(0xffe8e6da));
-        g.setFont(Font(13.0f, Font::bold));
-        g.drawText(name, 31, static_cast<int>(top), 350, 19, Justification::centredLeft);
-        g.setColour(Colour(0xff8298a3));
-        g.setFont(Font(10.0f, Font::plain));
-        g.drawText(helper, 570, static_cast<int>(top + 1), 612, 18, Justification::centredRight);
-    };
-    sectionHeader("OPERATOR LAB", "FREQUENCY  /  AMPLITUDE  /  ENVELOPES  /  KEY SCALING", 87.0f);
-    sectionHeader("PERFORMANCE & GLOBAL", "ALGORITHM  /  LFO  /  PITCH  /  OUTPUT", 574.0f);
-
-    // Subtle elevation separates the six editable sound modules.
-    g.setColour(Colour(0x30000000));
-    for (int row = 0; row < 2; ++row)
-        for (int col = 0; col < 3; ++col)
-            g.fillRoundedRectangle(18.0f + col * 393.0f, 114.0f + row * 234.0f,
-                                   381.0f, 226.0f, 9.0f);
-
-    if (processor->showKeyboard) {
-        g.setColour(Colour(0xff1a2b35));
-        g.fillRoundedRectangle(13.0f, 761.0f, 1174.0f, 78.0f, 8.0f);
-        g.setColour(Colour(0xff2e4852));
-        g.drawRoundedRectangle(13.5f, 761.5f, 1173.0f, 77.0f, 8.0f, 1.0f);
+    advanced.setVisible(processor->showAdvanced);
+    if (processor->showAdvanced) {
+        advanced.setBounds(0, y, w, AdvancedPanel::panelHeight);
+        y += AdvancedPanel::panelHeight;
     }
+
+    midiKeyboard.setVisible(processor->showKeyboard);
+    if (processor->showKeyboard) {
+        midiKeyboard.setBounds(14, y + 9, w - 28, KEYBOARD_AREA_HEIGHT - 16);
+        midiKeyboard.setKeyWidth((w - 28) / 52.0f);
+        y += KEYBOARD_AREA_HEIGHT;
+    }
+
+    if (statusReadout != nullptr)
+        statusReadout->setBounds(14, y + 4, 640, STATUS_BAR_HEIGHT - 8);
+    panicButton.setBounds(w - 140, y + 3, 88, STATUS_BAR_HEIGHT - 6);
+    keyboardButton.setBounds(w - 46, y + 3, 38, STATUS_BAR_HEIGHT - 6);
+    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
+}
+
+void DexedAudioProcessorEditor::paint (Graphics& g) {
+    // Draw at logical coordinates with the same scale as the child frame so
+    // every vector border stays sharp on HiDPI hosts.
+    g.fillAll(vt::toolbarBottom);
+    g.addTransform(AffineTransform::scale(processor->getZoomFactor()));
+    const int w = WINDOW_SIZE_X;
+    const int h = logicalHeight();
+
+    // Upper toolbar.
+    g.setGradientFill(ColourGradient(vt::toolbarTop, 0.0f, 0.0f, vt::toolbarBottom, 0.0f, (float) TOOLBAR_HEIGHT, false));
+    g.fillRect(0, 0, w, TOOLBAR_HEIGHT);
+    g.setColour(Colours::black);
+    g.fillRect(0, TOOLBAR_HEIGHT - 1, w, 1);
+    g.setColour(vt::toolbarLine);
+    g.fillRect(170, 10, 1, 24);
+    g.fillRect(844, 10, 1, 24);
+
+    // Keyboard bed.
+    if (processor->showKeyboard) {
+        const int ky = h - STATUS_BAR_HEIGHT - KEYBOARD_AREA_HEIGHT;
+        g.setGradientFill(ColourGradient(Colour(0xff1b1c1f), 0.0f, (float) ky, Colour(0xff111214), 0.0f,
+                                         (float) (ky + KEYBOARD_AREA_HEIGHT), false));
+        g.fillRect(0, ky, w, KEYBOARD_AREA_HEIGHT);
+        g.setColour(Colours::black);
+        g.fillRect(12, ky + 7, w - 24, KEYBOARD_AREA_HEIGHT - 12);
+        g.setColour(vt::membraneMaroon.withAlpha(0.85f));
+        g.fillRect(14, ky + 7, w - 28, 2);
+    }
+
+    // Lower status bar.
+    const int sy = h - STATUS_BAR_HEIGHT;
+    g.setGradientFill(ColourGradient(vt::toolbarTop, 0.0f, (float) sy, vt::toolbarBottom, 0.0f, (float) h, false));
+    g.fillRect(0, sy, w, STATUS_BAR_HEIGHT);
+    g.setColour(Colours::black);
+    g.fillRect(0, sy, w, 1);
+    g.setColour(vt::toolbarLine);
+    g.fillRect(w - 148, sy + 6, 1, STATUS_BAR_HEIGHT - 12);
+}
+
+void DexedAudioProcessorEditor::setAdvancedOpen(bool open) {
+    processor->showAdvanced = open;
+    processor->savePreference();
+    hardware.setAdvancedOpen(open);
+    resetSize();
+    repaint();
+}
+
+void DexedAudioProcessorEditor::setKeyboardVisible(bool visible) {
+    processor->showKeyboard = visible;
+    processor->savePreference();
+    resetSize();
+    repaint();
+}
+
+void DexedAudioProcessorEditor::showMainMenu() {
+    PopupMenu menu;
+    menu.addSectionHeader("VOICE");
+    menu.addItem("Initialise Voice", [this] { initProgram(); });
+    menu.addItem("Store Voice...", [this] { storeProgram(); });
+    menu.addItem("Send Voice to DX7", [this] { processor->sendCurrentSysexProgram(); });
+    menu.addSectionHeader("CARTRIDGE");
+    menu.addItem("Cartridge Library...", [this] { cartShow(); });
+    menu.addItem("Export Cartridge (.syx)...", [this] { saveCart(); });
+    menu.addSectionHeader("SETTINGS");
+    menu.addItem("MIDI, Controllers && Tuning...", [this] { parmShow(); });
+    menu.addItem("Show Current Tuning...", [this] { tuningShow(); });
+    menu.addSeparator();
+    menu.addItem("Advanced Workspace", true, processor->showAdvanced, [this] { setAdvancedOpen(!processor->showAdvanced); });
+    menu.addItem("On-screen Keyboard", true, processor->showKeyboard, [this] { setKeyboardVisible(!processor->showKeyboard); });
+    if (processor->getZoomFactor() != 1.0f)
+        menu.addItem("Reset UI Scaling", [this] { resetZoomFactor(); });
+    menu.addSeparator();
+    menu.addItem("About...", [this] {
+        if (ModifierKeys::getCurrentModifiers().isShiftDown()) {
+            debugger.reset(new ValueTreeDebugger(processor->parameters.rootVt));
+            return;
+        }
+        aboutBox = std::make_unique<AboutBox>();
+        addAndMakeVisible(aboutBox.get());
+        aboutBox->centreWithSize(aboutBox->getWidth(), aboutBox->getHeight());
+        aboutBox->enterModalState(true, {});
+    });
+    menu.showMenuAsync(PopupMenu::Options().withTargetComponent(&menuButton));
+}
+
+void DexedAudioProcessorEditor::showProgramMenu() {
+    PopupMenu menu;
+    const int current = processor->getCurrentProgram();
+    for (int i = 0; i < processor->getNumPrograms(); ++i) {
+        const auto label = String(i + 1).paddedLeft('0', 2) + "   " + processor->getProgramName(i).trim();
+        menu.addItem(label, true, i == current, [this, i] { selectProgram(i); });
+    }
+    menu.showMenuAsync(PopupMenu::Options().withTargetComponent(&presetField)
+                                           .withMinimumWidth(presetField.getWidth())
+                                           .withMaximumNumColumns(2));
 }
 
 void DexedAudioProcessorEditor::cartShow() {
+    // The library needs the full workspace height.
+    if (!processor->showAdvanced)
+        setAdvancedOpen(true);
     stopTimer();
     cartManager.resetActiveSysex();
-    cartManagerCover.setBounds(0, 0, WINDOW_SIZE_X, WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT);
-    // The cartridge browser retains its deliberately compact 800px data grid.
-    // Centre it as a modal workspace instead of stretching its rows and cells.
-    cartManager.setBounds((WINDOW_SIZE_X - 844) / 2, 124, 844, 556);
+    const int coverTop = TOOLBAR_HEIGHT;
+    const int coverHeight = logicalHeight() - TOOLBAR_HEIGHT - STATUS_BAR_HEIGHT;
+    cartManagerCover.setBounds(0, coverTop, WINDOW_SIZE_X, coverHeight);
+    // The cartridge browser retains its compact 800px data grid; centre it.
+    cartManager.setBounds((WINDOW_SIZE_X - 844) / 2, jmax(8, (coverHeight - 556) / 2), 844, 556);
     cartManager.updateCartFilename();
     cartManagerCover.setVisible(true);
     cartManager.initialFocus();
@@ -254,8 +369,8 @@ void DexedAudioProcessorEditor::applyCart(Cartridge cart, File file) {
     processor->loadCartridge(cart);
     rebuildProgramCombobox();
     processor->setCurrentProgram(0);
-    global.programs->setSelectedId(processor->getCurrentProgram()+1, dontSendNotification);
     processor->updateHostDisplay();
+    updateUI();
 
     processor->activeFileCartridge = file;
 }
@@ -281,7 +396,7 @@ void DexedAudioProcessorEditor::tuningShow() {
     DialogWindow::LaunchOptions options;
     options.content.setOwned(te);
     options.dialogTitle = "Current Tuning";
-    options.dialogBackgroundColour = Colour(0xFF323E44);
+    options.dialogBackgroundColour = vt::deckPanel;
     options.escapeKeyTriggersCloseButton = true;
     options.useNativeTitleBar = false;
     options.resizable = false;
@@ -303,7 +418,7 @@ public:
 
 void DexedAudioProcessorEditor::parmShow() {
     auto param = new ParamDialog(processor->parameters, *processor);
-    param->setColour(AlertWindow::backgroundColourId, Colour(0xFF323E44));
+    param->setColour(AlertWindow::backgroundColourId, vt::deckPanel);
     param->setDialogValues(processor->controllers, processor->sysexComm, processor->showKeyboard, processor->getZoomFactor());
     param->setIsStandardTuning(processor->synthTuningState->is_standard_tuning() );
     param->setTuningCallback([this](ParamDialog *p, ParamDialog::TuningAction which) {
@@ -334,6 +449,7 @@ void DexedAudioProcessorEditor::parmShow() {
                                    AffineTransform scaleAffine = AffineTransform::scale(this->processor->getZoomFactor());
                                    frameComponent.setTransform(scaleAffine);
                                    resetSize();
+                                   repaint();
 
                                    if ( ret == false ) {
                                        AlertWindow::showMessageBoxAsync(AlertWindow::WarningIcon, "Midi Interface", "Error opening midi ports");
@@ -341,7 +457,7 @@ void DexedAudioProcessorEditor::parmShow() {
                                };
     param->setGeneralCallback(generalCallback);
 
-    dexedParameterDialog = std::make_unique<DexedDialogWindow>("dexed Parameters", Colour(0xFF323E44));
+    dexedParameterDialog = std::make_unique<DexedDialogWindow>("Settings", vt::deckPanel);
     dexedParameterDialog->setContentOwned(param, true);
     frameComponent.addAndMakeVisible(dexedParameterDialog.get());
     dexedParameterDialog->centreAroundComponent(&frameComponent, param->getWidth(), param->getHeight() + dexedParameterDialog->getTitleBarHeight());
@@ -350,91 +466,6 @@ void DexedAudioProcessorEditor::parmShow() {
 
 void DexedAudioProcessorEditor::initProgram() {
     processor->resetToInitVoice();
-}
-
-void DexedAudioProcessorEditor::comboBoxChanged (ComboBox* comboBoxThatHasChanged) {
-    processor->setCurrentProgram(global.programs->getSelectedId()-1);
-    processor->updateHostDisplay();
-    updateHeader();
-}
-
-void DexedAudioProcessorEditor::timerCallback() {
-    if ( processor->programChanged.compareAndSetBool(false, true) ) {
-        updateUI();
-    }
-
-    if ( ! processor->peekVoiceStatus() )
-        return;
-
-    for(int i=0;i<6;i++) {
-        //operators[i].updateGain(sqrt(processor->voiceStatus.amp[5 - i]) / 8196);        // TODO: FUGLY !!!! change this sqrt nonsense
-
-        const int amp_min = 1036152;
-        const float one_per_amp_diff = (float)(1.0 / (259037922 - amp_min));
-        // Note, that minimum and maximum values of ``amp`` are different and depend on the engines. 
-        // These two constants were determined from the results produced by the OPL engine,
-        // because its minimum is smaller, its maximum is higher than in the other cases. 
-
-        int amp = processor->voiceStatus.amp[5 - i] - amp_min;
-        if (amp <= 0) amp = 0;
-        operators[i]->updateGain(amp * one_per_amp_diff);
-        operators[i]->updateEnvPos(processor->voiceStatus.ampStep[5 - i]);
-    }
-    global.updatePitchPos(processor->voiceStatus.pitchStep);
-    global.updateVu(processor->vuSignal);
-}
-
-void DexedAudioProcessorEditor::updateUI() {
-    for(int i=0;i<6;i++) {
-        operators[i]->updateDisplay();
-    }
-    rebuildProgramCombobox();
-    global.updateDisplay();
-    cartManager.updateCartFilename();
-    updateHeader();
-}
-
-void DexedAudioProcessorEditor::updateHeader() {
-    auto name = processor->activeProgram.getName().trim();
-    voiceNameLabel.setText(name.isEmpty() ? "INIT VOICE" : name, dontSendNotification);
-
-    const int current = processor->getCurrentProgram() + 1;
-    const int count = processor->getNumPrograms();
-    voiceNumberLabel.setText("VOICE " + String(current).paddedLeft('0', 2)
-                            + " / " + String(count).paddedLeft('0', 2)
-                            + "     -     6 OP / 32 ALGORITHMS", dontSendNotification);
-}
-
-void DexedAudioProcessorEditor::moveToProgram(int direction) {
-    const int count = processor->getNumPrograms();
-    if (count <= 0)
-        return;
-
-    const int next = (processor->getCurrentProgram() + direction + count) % count;
-    processor->setCurrentProgram(next);
-    processor->updateHostDisplay();
-    updateUI();
-}
-
-void DexedAudioProcessorEditor::rebuildProgramCombobox() {
-    global.programs->clear(dontSendNotification);
-
-    processor->currentCart.getProgramNames(processor->programNames);
-
-    for(int i=0;i<processor->getNumPrograms();i++) {
-        String id;
-        id << (i+1) << ". " << processor->getProgramName(i);
-        global.programs->addItem(id, i+1);
-    }
-
-    global.programs->setSelectedId(processor->getCurrentProgram()+1, dontSendNotification);
-
-    String name = processor->activeProgram.getName();
-    cartManager.setActiveProgram(processor->getCurrentProgram(), name);
-    if ( name != processor->getProgramName(processor->getCurrentProgram()) )
-        global.programs->setText("**. " + name, dontSendNotification);
-
-    cartManager.resetActiveSysex();
 }
 
 void DexedAudioProcessorEditor::storeProgram() {
@@ -660,6 +691,137 @@ void DexedAudioProcessorEditor::filesDropped (const StringArray &files, int x, i
     };
 }
 
+
+//==============================================================================
+void DexedAudioProcessorEditor::timerCallback() {
+    if ( processor->programChanged.compareAndSetBool(false, true) ) {
+        updateUI();
+    }
+
+    // Keep the data-entry fader and the LCD in sync with the selected
+    // parameter, whatever changed it (mouse, host automation, MIDI CC...).
+    if (dataParameter != nullptr) {
+        const float value = dataParameter->getValue();
+        if (value != lastDataValue) {
+            lastDataValue = value;
+            auto& slider = hardware.getDataEntrySlider();
+            if (slider.getThumbBeingDragged() < 0)
+                slider.setValue(value, dontSendNotification);
+        }
+    }
+    updateLcd();
+
+    if ( ! processor->peekVoiceStatus() )
+        return;
+
+    for(int i=0;i<6;i++) {
+        const int amp_min = 1036152;
+        const float one_per_amp_diff = (float)(1.0 / (259037922 - amp_min));
+        // Note, that minimum and maximum values of ``amp`` are different and depend on the engines.
+        // These two constants were determined from the results produced by the OPL engine,
+        // because its minimum is smaller, its maximum is higher than in the other cases.
+
+        int amp = processor->voiceStatus.amp[5 - i] - amp_min;
+        if (amp <= 0) amp = 0;
+        advanced.setOperatorStatus(i, amp * one_per_amp_diff, processor->voiceStatus.ampStep[5 - i]);
+    }
+    advanced.setPitchEnvelopeStage(processor->voiceStatus.pitchStep);
+    advanced.setOutputLevel(processor->vuSignal);
+}
+
+void DexedAudioProcessorEditor::setDataParameter(RangedAudioParameter* parameter) {
+    if (parameter == nullptr || parameter == dataParameter)
+        return;
+    dataParameter = parameter;
+    lastDataValue = -1.0f;
+    auto& slider = hardware.getDataEntrySlider();
+    slider.setValue(parameter->getValue(), dontSendNotification);
+    slider.setTitle("Data entry: " + parameter->getName(100));
+    updateLcd();
+}
+
+void DexedAudioProcessorEditor::stepDataParameter(int delta) {
+    if (dataParameter == nullptr)
+        return;
+    const auto range = dataParameter->getNormalisableRange();
+    const float span = range.end - range.start;
+    const float step = range.interval > 0.0f ? range.interval : span / 100.0f;
+    const float current = dataParameter->convertFrom0to1(dataParameter->getValue());
+    const float next = jlimit(range.start, range.end, current + step * (float) delta);
+    dataParameter->beginChangeGesture();
+    dataParameter->setValueNotifyingHost(dataParameter->convertTo0to1(next));
+    dataParameter->endChangeGesture();
+}
+
+void DexedAudioProcessorEditor::updateLcd() {
+    constexpr int columns = LcdDisplay::columns;
+    const int current = processor->getCurrentProgram();
+    auto name = processor->activeProgram.getName().trim().toUpperCase();
+    if (name.isEmpty())
+        name = "INIT VOICE";
+    String algo;
+    if (auto* p = processor->parameters.getParameter(IDs::algorithm.name))
+        algo = "A" + String(roundToInt(p->convertFrom0to1(p->getValue()))).paddedLeft('0', 2);
+    const auto top = String(current + 1).paddedLeft('0', 2) + " " + name.substring(0, 10).paddedRight(' ', 10)
+                   + String().paddedRight(' ', columns - 13 - algo.length()) + algo;
+
+    String bottom;
+    if (dataParameter != nullptr) {
+        const auto value = dataParameter->getCurrentValueAsText().trim().toUpperCase();
+        const int nameSpace = jmax(1, columns - value.length() - 1);
+        auto label = dataParameter->getName(100).toUpperCase().substring(0, nameSpace);
+        bottom = label.paddedRight(' ', columns - value.length()) + value;
+    }
+    if (top != lastLcdTop || bottom != lastLcdBottom) {
+        lastLcdTop = top;
+        lastLcdBottom = bottom;
+        hardware.setLcd(top, bottom);
+    }
+}
+
+void DexedAudioProcessorEditor::updateUI() {
+    rebuildProgramCombobox();
+    cartManager.updateCartFilename();
+    updateHeader();
+    updateLcd();
+}
+
+void DexedAudioProcessorEditor::updateHeader() {
+    auto name = processor->activeProgram.getName().trim();
+    const int current = processor->getCurrentProgram() + 1;
+    const int count = processor->getNumPrograms();
+    String cart = processor->activeFileCartridge.existsAsFile()
+                      ? processor->activeFileCartridge.getFileNameWithoutExtension().toUpperCase()
+                      : String("INTERNAL");
+    presetField.setText(name.isEmpty() ? "INIT VOICE" : name,
+                        cart.substring(0, 14) + "   " + String(current).paddedLeft('0', 2) + " / "
+                        + String(count).paddedLeft('0', 2));
+    hardware.setCurrentVoice(processor->getCurrentProgram(), processor->programNames);
+}
+
+void DexedAudioProcessorEditor::selectProgram(int index) {
+    const int count = processor->getNumPrograms();
+    if (count <= 0)
+        return;
+    processor->setCurrentProgram(jlimit(0, count - 1, index));
+    processor->updateHostDisplay();
+    updateUI();
+}
+
+void DexedAudioProcessorEditor::moveToProgram(int direction) {
+    const int count = processor->getNumPrograms();
+    if (count <= 0)
+        return;
+    selectProgram((processor->getCurrentProgram() + direction + count) % count);
+}
+
+void DexedAudioProcessorEditor::rebuildProgramCombobox() {
+    processor->currentCart.getProgramNames(processor->programNames);
+    String name = processor->activeProgram.getName();
+    cartManager.setActiveProgram(processor->getCurrentProgram(), name);
+    cartManager.resetActiveSysex();
+}
+
 bool DexedAudioProcessorEditor::keyPressed(const KeyPress& key, Component* originatingComponent) {
     int keycode = key.getKeyCode();
     ModifierKeys mods = key.getModifiers();
@@ -672,16 +834,20 @@ bool DexedAudioProcessorEditor::keyPressed(const KeyPress& key, Component* origi
         int op = keycode - '1';
 
         if ( mods.isShiftDown() ) {
-            operators[op]->toggleOpSwitch();
+            hardware.toggleOperator(op);
             return true;
         }
 
-        operators[op]->grabKeyboardFocus();
+        if (!processor->showAdvanced)
+            setAdvancedOpen(true);
+        advanced.focusOperator(op);
         return true;
     }
 
     if ( keycode == 'G' && mods.isCtrlDown() ) {
-        global.grabKeyboardFocus();
+        if (!processor->showAdvanced)
+            setAdvancedOpen(true);
+        advanced.focusGlobal();
         return true;
     }
 
@@ -695,6 +861,16 @@ bool DexedAudioProcessorEditor::keyPressed(const KeyPress& key, Component* origi
         return true;
     }
 
+    if ( keycode == 'E' && mods.isCtrlDown() ) {
+        setAdvancedOpen(!processor->showAdvanced);
+        return true;
+    }
+
+    if ( mods.isCtrlDown() && (keycode == KeyPress::leftKey || keycode == KeyPress::rightKey) ) {
+        moveToProgram(keycode == KeyPress::leftKey ? -1 : 1);
+        return true;
+    }
+
     if ( key.getKeyCode() == KeyPress::escapeKey ) {
         cartManager.hideCartridgeManager();
         return true;
@@ -704,11 +880,7 @@ bool DexedAudioProcessorEditor::keyPressed(const KeyPress& key, Component* origi
 }
 
 void DexedAudioProcessorEditor::resetSize() {
-    float factor = processor->getZoomFactor();
-    const int logicalHeight = processor->showKeyboard ? WINDOW_SIZE_Y
-                                                      : WINDOW_SIZE_Y - KEYBOARD_AREA_HEIGHT;
-    frameComponent.setBounds(0, 0, WINDOW_SIZE_X, logicalHeight);
-    midiKeyboard.setVisible(processor->showKeyboard);
-    keyboardButton.setToggleState(processor->showKeyboard, dontSendNotification);
-    setSize(roundToInt(WINDOW_SIZE_X * factor), roundToInt(logicalHeight * factor));
+    const float factor = processor->getZoomFactor();
+    layoutFrame();
+    setSize(roundToInt(WINDOW_SIZE_X * factor), roundToInt(logicalHeight() * factor));
 }
