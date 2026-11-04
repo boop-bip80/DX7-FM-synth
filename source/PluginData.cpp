@@ -232,4 +232,20 @@ void DexedAudioProcessor::resolvAppDir() {
         }
         delete builtin_pgm;
     }
+
+    // The bundled "80s LA Studio" library: 32 DX7 cartridges (1,024 voices) compiled into the binary as
+    // assets/la_studio_presets.zip. It is unpacked once into Cartridges/80s-LA-Studio, for new and existing users
+    // alike. A folder that already exists is never touched, so user edits and deletions survive updates.
+    File laStudioDir = dexedCartDir.getChildFile("80s-LA-Studio");
+
+    if ( ! laStudioDir.exists() ) {
+        MemoryInputStream *laStream = new MemoryInputStream(BinaryData::la_studio_presets_zip, BinaryData::la_studio_presets_zipSize, false);
+        ZipFile *laZip = new ZipFile(laStream, true);
+
+        // entries are stored as 80s-LA-Studio/<section>/<cartridge>.syx; uncompressEntry creates the folders
+        for(int i=0;i<laZip->getNumEntries();i++)
+            laZip->uncompressEntry(i, dexedCartDir);
+
+        delete laZip;
+    }
 }

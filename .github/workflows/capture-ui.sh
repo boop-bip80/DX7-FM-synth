@@ -19,21 +19,22 @@ fi
 mkdir -p "$(dirname "$destination")"
 log_path="${RUNNER_TEMP:-/tmp}/dx7-screenshot-standalone.log"
 
-# Show the shipped 80s LA Studio library instead of the stock banks. On Linux the app reads its cartridges from
-# $XDG_DATA_HOME/DigitalSuburban/Dexed/Cartridges (PluginData.cpp) and opens Dexed_01.syx as the startup cartridge,
-# so an isolated, pre-seeded data directory makes the real editor start on voice 1 of cartridge LA01 with the whole
-# library available in the cartridge tree. Nothing is mocked: only the data the app loads differs.
+# Show the bundled 80s LA Studio library instead of the stock banks. On Linux the app reads its cartridges from
+# $XDG_DATA_HOME/DigitalSuburban/Dexed/Cartridges (PluginData.cpp) and opens Dexed_01.syx as the startup cartridge.
+# We pre-seed an isolated data directory with ONLY that startup cartridge (a copy of LA01). The 80s-LA-Studio folder is
+# deliberately left out: the app must install it itself from the presets compiled into the binary, which is verified
+# at the end of this script (verify_bundled_presets). Nothing is mocked.
 data_home=""
+cart_dir=""
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 presets_dir="$script_dir/../../presets/80s-LA-Studio"
 if [[ -f "$presets_dir/01-Keys/LA01_Electric-Pianos-Classic-Tines.syx" ]]; then
   data_home="$(mktemp -d)"
   cart_dir="$data_home/DigitalSuburban/Dexed/Cartridges"
   mkdir -p "$cart_dir"
-  cp -R "$presets_dir" "$cart_dir/80s-LA-Studio"
   cp "$presets_dir/01-Keys/LA01_Electric-Pianos-Classic-Tines.syx" "$cart_dir/Dexed_01.syx"
   export XDG_DATA_HOME="$data_home"
-  echo "Seeded $cart_dir with the 80s LA Studio library ($(find "$cart_dir" -name '*.syx' | wc -l) cartridges incl. startup copy)"
+  echo "Seeded $cart_dir with the startup cartridge only; the app must install the bundled 80s-LA-Studio folder itself"
 else
   echo "80s LA Studio presets not found; capturing with the stock cartridges."
 fi
@@ -131,5 +132,28 @@ click_editor $(( 12 + 62 )) "$tab_y"   # back to OVERVIEW
 click_editor 1171 $(( 44 + 107 ))
 capture "$shots_dir/dx7-classic.png"
 click_editor 1171 $(( 44 + 107 ))
+
+# Prove the presets are baked into this build: every cartridge in presets/80s-LA-Studio must now exist, byte for byte,
+# in the Cartridges folder the app populated on first launch.
+verify_bundled_presets() {
+  [[ -n "$cart_dir" ]] || { echo "No seeded data directory; skipping bundled-preset check."; return 0; }
+  local installed="$cart_dir/80s-LA-Studio" expected found bad=0 f rel
+  expected="$(find "$presets_dir" -name '*.syx' | wc -l)"
+  found="$(find "$installed" -name '*.syx' 2>/dev/null | wc -l)"
+  while IFS= read -r f; do
+    rel="${f#"$presets_dir"/}"
+    if ! cmp -s "$f" "$installed/$rel"; then
+      echo "Bundled preset missing or different: $rel" >&2
+      bad=$((bad + 1))
+    fi
+  done < <(find "$presets_dir" -name '*.syx' | sort)
+  if (( expected != 32 || found != expected || bad != 0 )); then
+    echo "BUNDLED PRESETS CHECK FAILED: repo has $expected cartridges, app installed $found, $bad missing/different." >&2
+    ls -R "$cart_dir" >&2 || true
+    exit 1
+  fi
+  echo "Bundled presets verified: the app installed all $found cartridges (1,024 voices), byte-identical to presets/80s-LA-Studio."
+}
+verify_bundled_presets
 
 echo "All live captures complete."

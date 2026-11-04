@@ -54,6 +54,8 @@ jobs:
             libasound2-dev libx11-dev libxinerama-dev libxext-dev \
             libfreetype6-dev libwebkit2gtk-4.1-dev libglu1-mesa-dev \
             libgtk-3-dev libjack-jackd2-dev libsndfile1-dev xvfb
+      - name: Verify the compiled-in 80s LA Studio bundle is current
+        run: python3 tools/preset-lab/make_bundle.py --check
       - name: Configure and package
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \

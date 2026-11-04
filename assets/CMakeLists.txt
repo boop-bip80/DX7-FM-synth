@@ -23,4 +23,5 @@ juce_add_binary_data(DexedResources SOURCES
     ui/Switch_96x52.png
     ui/SwitchLighted_48x26.png
     builtin_pgm.zip
+    la_studio_presets.zip
 )
