@@ -19,3 +19,5 @@ CMakeLists.txt text eol=lf
 *.zip binary
 *.skin binary
 *.knob binary
+
+*.syx binary

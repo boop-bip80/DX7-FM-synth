@@ -82,6 +82,12 @@ UI-Nightly is a rolling **pre-release**, not a claim of production certification
 
 Some editing features and host interactions are inherited from Dexed; see the [upstream manual](https://asb2m10.github.io/dexed/) for background. The supported shortcuts and mouse gestures are listed in [doc/Keybindings.md](doc/Keybindings.md).
 
+## 80s LA Studio preset library
+
+[`presets/80s-LA-Studio`](presets/80s-LA-Studio) holds **1,024 original voices in 32 DX7 cartridges** (`.syx`), organised like a well-stocked Los Angeles studio of the 1980s: keys, basses, brass and winds, strings, pads, leads, mallets and bells, guitars and world strings, voices, five cartridges of drums and percussion, sound effects, and rhythmic/motion patches.
+Open the cartridge library and press **LOAD** (or drag a file onto it), or run `python3 tools/preset-lab/install_presets.py` to copy the whole set into the app's `Cartridges` folder.
+See the [folder guide](presets/80s-LA-Studio/README.md) and the [voice-by-voice catalog](doc/80S_LA_STUDIO_PRESETS.md). The generator, offline renderer and audit tooling are in [`tools/preset-lab`](tools/preset-lab).
+
 ## Build from source
 
 This is a **CMake + JUCE** C++ project. The dependencies are Git submodules.
